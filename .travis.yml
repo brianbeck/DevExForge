@@ -64,8 +64,9 @@ jobs:
       install: skip
       script:
         - export TAG=${TRAVIS_TAG:-${TRAVIS_COMMIT:0:7}}
-        - git clone https://${GITHUB_TOKEN_DEVEXFORGE}@github.com/${GITOPS_REPO}.git /tmp/gitops
+        - git clone https://x-access-token:${GITHUB_TOKEN_DEVEXFORGE}@github.com/${GITOPS_REPO}.git /tmp/gitops
         - cd /tmp/gitops
+        - git checkout main
         - >
           sed -i
           "s|tag:.*# api|tag: \"$TAG\"  # api|g;
@@ -76,4 +77,4 @@ jobs:
         - git config user.email "ci@brianbeck.net"
         - git add -A
         - "git commit -m \"chore: update stage images to $TAG [skip ci]\" || echo 'No changes'"
-        - git push
+        - git push origin main
