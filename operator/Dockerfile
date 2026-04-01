@@ -1,6 +1,6 @@
 FROM python:3.12-slim
 
-RUN useradd --uid 10001 --no-create-home --shell /bin/false operator
+RUN useradd --uid 10001 --no-create-home --shell /bin/false --no-user-group apprunner
 
 WORKDIR /app
 
