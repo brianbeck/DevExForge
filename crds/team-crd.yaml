@@ -1,0 +1,98 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: teams.devexforge.brianbeck.net
+spec:
+  group: devexforge.brianbeck.net
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          required: [spec]
+          properties:
+            spec:
+              type: object
+              required: [displayName, owner]
+              properties:
+                displayName:
+                  type: string
+                  maxLength: 128
+                description:
+                  type: string
+                  maxLength: 512
+                owner:
+                  type: object
+                  required: [email]
+                  properties:
+                    email:
+                      type: string
+                    keycloakId:
+                      type: string
+                members:
+                  type: array
+                  items:
+                    type: object
+                    required: [email, role]
+                    properties:
+                      email:
+                        type: string
+                      keycloakId:
+                        type: string
+                      role:
+                        type: string
+                        enum: [admin, developer, viewer]
+                costCenter:
+                  type: string
+                tags:
+                  type: object
+                  additionalProperties:
+                    type: string
+            status:
+              type: object
+              properties:
+                phase:
+                  type: string
+                  enum: [Pending, Active, Suspended, Deleting]
+                environmentCount:
+                  type: integer
+                conditions:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      type:
+                        type: string
+                      status:
+                        type: string
+                        enum: ["True", "False", "Unknown"]
+                      lastTransitionTime:
+                        type: string
+                        format: date-time
+                      reason:
+                        type: string
+                      message:
+                        type: string
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - name: Display Name
+          type: string
+          jsonPath: .spec.displayName
+        - name: Owner
+          type: string
+          jsonPath: .spec.owner.email
+        - name: Phase
+          type: string
+          jsonPath: .status.phase
+        - name: Environments
+          type: integer
+          jsonPath: .status.environmentCount
+  scope: Cluster
+  names:
+    plural: teams
+    singular: team
+    kind: Team
+    shortNames: [tm]

@@ -1,0 +1,61 @@
+services:
+  postgres:
+    image: postgres:latest
+    environment:
+      POSTGRES_DB: devexforge
+      POSTGRES_USER: devexforge
+      POSTGRES_PASSWORD: devexforge
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql
+      - ./dev/init-databases.sql:/docker-entrypoint-initdb.d/init-databases.sql:ro
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U devexforge]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:latest
+    command: start-dev --import-realm
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: keycloak
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_HTTP_PORT: "8080"
+      KC_HOSTNAME_STRICT: "false"
+      KC_HTTP_ENABLED: "true"
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./dev/keycloak/teams-realm.json:/opt/keycloak/data/import/teams-realm.json:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://devexforge:devexforge@postgres:5432/devexforge
+      KEYCLOAK_URL: http://keycloak:8080
+      KEYCLOAK_REALM: teams
+      KEYCLOAK_CLIENT_ID: devexforge-api
+      K8S_IN_CLUSTER: "false"
+      CORS_ORIGINS: '["http://localhost:5173","http://localhost:8000"]'
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./api/app:/app/app:ro
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+volumes:
+  pgdata:

@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: engineering-platform
+  labels:
+    app.kubernetes.io/name: devexforge-operator
+    app.kubernetes.io/part-of: devexforge

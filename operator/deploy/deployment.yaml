@@ -1,0 +1,65 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: devexforge-operator
+  namespace: engineering-platform
+  labels:
+    app.kubernetes.io/name: devexforge-operator
+    app.kubernetes.io/part-of: devexforge
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: devexforge-operator
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: devexforge-operator
+        app.kubernetes.io/part-of: devexforge
+    spec:
+      serviceAccountName: devexforge-operator
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
+        fsGroup: 1001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: operator
+          image: devexforge-operator:latest
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: LOG_LEVEL
+              value: "INFO"
+            - name: DEFAULT_INGRESS_NAMESPACE
+              value: "traefik"
+            - name: ARGOCD_NAMESPACE
+              value: "argocd"
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10

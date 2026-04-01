@@ -1,0 +1,80 @@
+namespace: engineering-platform
+
+api:
+  image:
+    repository: brianbeck/devexforge-api
+    tag: "0.1.0"
+    pullPolicy: IfNotPresent
+  replicas: 2
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+  env:
+    databaseUrl: postgresql+asyncpg://devexforge:devexforge@devexforge-postgres:5432/devexforge
+    keycloakUrl: http://keycloak-service.keycloak.svc.cluster.local:8080
+    keycloakRealm: teams
+    keycloakClientId: devexforge-api
+    corsOrigins: '["https://devexforge.brianbeck.net"]'
+    k8sInCluster: "true"
+    k8sStageContext: beck-stage-admin@beck-stage
+    k8sProdContext: beck-prod-admin@beck-prod
+  ingress:
+    host: devexforge-api.brianbeck.net
+
+portal:
+  image:
+    repository: brianbeck/devexforge-portal
+    tag: "0.1.0"
+    pullPolicy: IfNotPresent
+  replicas: 2
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
+  ingress:
+    host: devexforge.brianbeck.net
+
+operator:
+  image:
+    repository: brianbeck/devexforge-operator
+    tag: "0.1.0"
+    pullPolicy: IfNotPresent
+  replicas: 1
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+  env:
+    logLevel: INFO
+    ingressNamespace: traefik
+    argocdNamespace: argocd
+
+postgres:
+  enabled: true
+  image:
+    repository: postgres
+    tag: "16-alpine"
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  storage:
+    size: 5Gi
+    storageClass: ""
+  credentials:
+    database: devexforge
+    username: devexforge
+    password: devexforge

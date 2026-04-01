@@ -1,0 +1,76 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: devexforge-operator
+  namespace: engineering-platform
+  labels:
+    app.kubernetes.io/name: devexforge-operator
+    app.kubernetes.io/part-of: devexforge
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: devexforge-operator
+  labels:
+    app.kubernetes.io/name: devexforge-operator
+    app.kubernetes.io/part-of: devexforge
+rules:
+  # Custom Resource Definitions
+  - apiGroups: ["devexforge.brianbeck.net"]
+    resources: ["teams", "teams/status", "environments", "environments/status"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # Namespaces
+  - apiGroups: [""]
+    resources: ["namespaces"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # ResourceQuotas
+  - apiGroups: [""]
+    resources: ["resourcequotas"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # LimitRanges
+  - apiGroups: [""]
+    resources: ["limitranges"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # NetworkPolicies
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["networkpolicies"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # RoleBindings
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources: ["rolebindings"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # ClusterRoles (for binding references)
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources: ["clusterroles"]
+    verbs: ["get", "list", "watch", "bind"]
+  # Gatekeeper constraints
+  - apiGroups: ["constraints.gatekeeper.sh"]
+    resources: ["*"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # Argo CD AppProjects
+  - apiGroups: ["argoproj.io"]
+    resources: ["appprojects"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # Events
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create", "patch"]
+  - apiGroups: ["events.k8s.io"]
+    resources: ["events"]
+    verbs: ["create", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: devexforge-operator
+  labels:
+    app.kubernetes.io/name: devexforge-operator
+    app.kubernetes.io/part-of: devexforge
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: devexforge-operator
+subjects:
+  - kind: ServiceAccount
+    name: devexforge-operator
+    namespace: engineering-platform

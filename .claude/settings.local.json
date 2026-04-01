@@ -1,0 +1,35 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3 -c \"import ast; import os; errors=[]; [errors.append\\(f''{root}/{f}: {e}''\\) for root, _, files in os.walk\\(''app''\\) for f in files if f.endswith\\(''.py''\\) for e in [None] if not \\(lambda p: \\(ast.parse\\(open\\(p\\).read\\(\\)\\), True\\)[-1] if True else False\\)\\(os.path.join\\(root, f\\)\\)] or print\\(''All Python files parse OK''\\)\")",
+      "Bash(python3 -m py_compile devex/output.py)",
+      "Bash(python3 -m py_compile devex/client.py)",
+      "Bash(python3 -m py_compile devex/commands/team.py)",
+      "Bash(python3 -m py_compile devex/commands/members.py)",
+      "Bash(python3 -m py_compile devex/commands/env.py)",
+      "Bash(python3 -c \"import ast; ast.parse\\(open\\(''alembic/env.py''\\).read\\(\\)\\); ast.parse\\(open\\(''alembic/versions/001_initial.py''\\).read\\(\\)\\); print\\(''Alembic files parse OK''\\)\")",
+      "Bash(python3 -m py_compile api/app/config.py)",
+      "Bash(python3 -m py_compile api/app/database.py)",
+      "Bash(python3 -m py_compile api/app/main.py)",
+      "Bash(python3 -m py_compile api/app/models/team.py)",
+      "Bash(python3 -m py_compile api/app/models/environment.py)",
+      "Bash(python3 -m py_compile api/app/routers/health.py)",
+      "Bash(python3 -m py_compile api/app/routers/teams.py)",
+      "Bash(python3 -m py_compile api/app/routers/members.py)",
+      "Bash(python3 -m py_compile api/app/routers/environments.py)",
+      "Bash(python3 -m py_compile operator/main.py)",
+      "Bash(python3 -m py_compile operator/helpers.py)",
+      "Bash(python3 -m py_compile operator/handlers/team_handler.py)",
+      "Bash(python3 -m py_compile operator/handlers/environment_handler.py)",
+      "Bash(python3 -m py_compile cli/devex/main.py)",
+      "Bash(python3 -m py_compile cli/devex/client.py)",
+      "Bash(python3 -m py_compile cli/devex/output.py)",
+      "Bash(python3 -m py_compile cli/devex/commands/team.py)",
+      "Bash(python3 -m py_compile cli/devex/commands/members.py)",
+      "Bash(helm lint:*)",
+      "Bash(python3:*)",
+      "Bash(pkill -f \"uvicorn app.main:app\")",
+      "Bash(docker compose:*)"
+    ]
+  }
+}

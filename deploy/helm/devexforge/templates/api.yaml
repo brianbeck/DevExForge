@@ -1,0 +1,158 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: devexforge-api
+  namespace: {{ .Values.namespace }}
+  labels:
+    app.kubernetes.io/name: devexforge-api
+    {{- include "devexforge.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.api.replicas }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: devexforge-api
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: devexforge-api
+        {{- include "devexforge.labels" . | nindent 8 }}
+    spec:
+      serviceAccountName: devexforge-api
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        fsGroup: 1001
+      containers:
+        - name: api
+          image: "{{ .Values.api.image.repository }}:{{ .Values.api.image.tag }}"
+          imagePullPolicy: {{ .Values.api.image.pullPolicy }}
+          ports:
+            - containerPort: 8000
+          env:
+            - name: DATABASE_URL
+              value: {{ .Values.api.env.databaseUrl }}
+            - name: KEYCLOAK_URL
+              value: {{ .Values.api.env.keycloakUrl }}
+            - name: KEYCLOAK_REALM
+              value: {{ .Values.api.env.keycloakRealm }}
+            - name: KEYCLOAK_CLIENT_ID
+              value: {{ .Values.api.env.keycloakClientId }}
+            - name: K8S_IN_CLUSTER
+              value: "true"
+            - name: CORS_ORIGINS
+              value: {{ .Values.api.env.corsOrigins | quote }}
+            - name: K8S_STAGE_CONTEXT
+              value: {{ .Values.api.env.k8sStageContext }}
+            - name: K8S_PROD_CONTEXT
+              value: {{ .Values.api.env.k8sProdContext }}
+            - name: KUBECONFIG
+              value: /etc/kubeconfig/stage-kubeconfig
+          volumeMounts:
+            - name: stage-kubeconfig
+              mountPath: /etc/kubeconfig
+              readOnly: true
+          resources:
+            {{- toYaml .Values.api.resources | nindent 12 }}
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+      volumes:
+        - name: stage-kubeconfig
+          secret:
+            secretName: devexforge-stage-kubeconfig
+            optional: true
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: devexforge-api
+  namespace: {{ .Values.namespace }}
+  labels:
+    app.kubernetes.io/name: devexforge-api
+    {{- include "devexforge.labels" . | nindent 4 }}
+spec:
+  selector:
+    app.kubernetes.io/name: devexforge-api
+  ports:
+    - port: 8000
+      targetPort: 8000
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: devexforge-api
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "devexforge.labels" . | nindent 4 }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: devexforge-api
+  labels:
+    {{- include "devexforge.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [devexforge.brianbeck.net]
+    resources: [teams, teams/status, environments, environments/status]
+    verbs: [get, list, create, update, patch, delete]
+  - apiGroups: [constraints.gatekeeper.sh]
+    resources: ["*"]
+    verbs: [get, list]
+  - apiGroups: [aquasecurity.github.io]
+    resources: [vulnerabilityreports]
+    verbs: [get, list]
+  - apiGroups: [argoproj.io]
+    resources: [applications, appprojects]
+    verbs: [get, list, create, update, patch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: devexforge-api
+  labels:
+    {{- include "devexforge.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: devexforge-api
+subjects:
+  - kind: ServiceAccount
+    name: devexforge-api
+    namespace: {{ .Values.namespace }}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: devexforge-api
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "devexforge.labels" . | nindent 4 }}
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
+spec:
+  rules:
+    - host: {{ .Values.api.ingress.host }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: devexforge-api
+                port:
+                  number: 8000

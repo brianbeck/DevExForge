@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.pyc
+*.egg-info/
+dist/
+.venv/
+
+# Node
+node_modules/
+portal/dist/
+
+# Environment files
+.env
+
+# Docker
+pgdata/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Legacy module (superseded by api/, portal/, operator/, cli/)
+teams-management/
+
+# OS
+.DS_Store

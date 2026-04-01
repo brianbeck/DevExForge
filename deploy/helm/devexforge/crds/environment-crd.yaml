@@ -1,0 +1,185 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: environments.devexforge.brianbeck.net
+spec:
+  group: devexforge.brianbeck.net
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          required: [spec]
+          properties:
+            spec:
+              type: object
+              required: [teamRef, tier]
+              properties:
+                teamRef:
+                  type: string
+                  description: Name of the owning Team CR
+                tier:
+                  type: string
+                  enum: [dev, staging, production]
+                cluster:
+                  type: string
+                  description: Target cluster for this environment (set by API based on tier)
+                  enum: [beck-stage, beck-prod]
+                resourceQuota:
+                  type: object
+                  properties:
+                    cpuRequest:
+                      type: string
+                      default: "2"
+                    cpuLimit:
+                      type: string
+                      default: "4"
+                    memoryRequest:
+                      type: string
+                      default: "4Gi"
+                    memoryLimit:
+                      type: string
+                      default: "8Gi"
+                    pods:
+                      type: integer
+                      default: 20
+                    services:
+                      type: integer
+                      default: 10
+                    persistentVolumeClaims:
+                      type: integer
+                      default: 5
+                limitRange:
+                  type: object
+                  properties:
+                    defaultCpuRequest:
+                      type: string
+                      default: "100m"
+                    defaultCpuLimit:
+                      type: string
+                      default: "500m"
+                    defaultMemoryRequest:
+                      type: string
+                      default: "128Mi"
+                    defaultMemoryLimit:
+                      type: string
+                      default: "512Mi"
+                networkPolicy:
+                  type: object
+                  properties:
+                    allowInterNamespace:
+                      type: boolean
+                      default: false
+                    allowedNamespaces:
+                      type: array
+                      items:
+                        type: string
+                    egressAllowInternet:
+                      type: boolean
+                      default: true
+                policies:
+                  type: object
+                  properties:
+                    maxCriticalCVEs:
+                      type: integer
+                      default: 0
+                    maxHighCVEs:
+                      type: integer
+                      default: 5
+                    requireNonRoot:
+                      type: boolean
+                      default: true
+                    requireReadOnlyRoot:
+                      type: boolean
+                      default: false
+                    requireResourceLimits:
+                      type: boolean
+                      default: true
+                    exemptions:
+                      type: object
+                      description: Admin-only exemptions (managed by platform admins)
+                      properties:
+                        exemptImages:
+                          type: array
+                          description: Images exempt from root/CVE policies
+                          items:
+                            type: string
+                        exemptNamespaces:
+                          type: array
+                          description: Namespaces exempt from network policy restrictions
+                          items:
+                            type: string
+                argoCD:
+                  type: object
+                  properties:
+                    enabled:
+                      type: boolean
+                      default: true
+                    sourceRepos:
+                      type: array
+                      items:
+                        type: string
+                    allowedClusterResources:
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          group:
+                            type: string
+                          kind:
+                            type: string
+            status:
+              type: object
+              properties:
+                phase:
+                  type: string
+                  enum: [Pending, Provisioning, Active, Error, Deleting]
+                namespaceName:
+                  type: string
+                conditions:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      type:
+                        type: string
+                      status:
+                        type: string
+                        enum: ["True", "False", "Unknown"]
+                      lastTransitionTime:
+                        type: string
+                        format: date-time
+                      reason:
+                        type: string
+                      message:
+                        type: string
+                resourcesCreated:
+                  type: array
+                  items:
+                    type: string
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - name: Team
+          type: string
+          jsonPath: .spec.teamRef
+        - name: Tier
+          type: string
+          jsonPath: .spec.tier
+        - name: Cluster
+          type: string
+          jsonPath: .spec.cluster
+        - name: Namespace
+          type: string
+          jsonPath: .status.namespaceName
+        - name: Phase
+          type: string
+          jsonPath: .status.phase
+  scope: Cluster
+  names:
+    plural: environments
+    singular: environment
+    kind: Environment
+    shortNames: [env]
