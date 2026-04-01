@@ -3,8 +3,8 @@ import { useParams, useNavigate } from "react-router-dom";
 import { listEnvironments, createEnvironment } from "@/api/environments";
 import type { Environment, EnvironmentCreate } from "@/types";
 
-type Tier = "dev" | "staging" | "prod";
-const TIERS: Tier[] = ["dev", "staging", "prod"];
+type Tier = "dev" | "staging" | "production";
+const TIERS: Tier[] = ["dev", "staging", "production"];
 
 export default function EnvironmentsPage() {
   const { slug } = useParams<{ slug: string }>();
@@ -14,10 +14,10 @@ export default function EnvironmentsPage() {
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [selectedTier, setSelectedTier] = useState<Tier>("dev");
-  const [cpuRequests, setCpuRequests] = useState("2");
-  const [cpuLimits, setCpuLimits] = useState("4");
-  const [memoryRequests, setMemoryRequests] = useState("2Gi");
-  const [memoryLimits, setMemoryLimits] = useState("4Gi");
+  const [cpuRequest, setCpuRequest] = useState("2");
+  const [cpuLimit, setCpuLimit] = useState("4");
+  const [memoryRequest, setMemoryRequest] = useState("2Gi");
+  const [memoryLimit, setMemoryLimit] = useState("4Gi");
   const [submitting, setSubmitting] = useState(false);
 
   const fetchEnvironments = useCallback(async () => {
@@ -48,10 +48,10 @@ export default function EnvironmentsPage() {
     const data: EnvironmentCreate = {
       tier: selectedTier,
       resourceQuota: {
-        cpuRequests,
-        cpuLimits,
-        memoryRequests,
-        memoryLimits,
+        cpuRequest,
+        cpuLimit,
+        memoryRequest,
+        memoryLimit,
       },
     };
 
@@ -111,8 +111,8 @@ export default function EnvironmentsPage() {
                 <input
                   id="cpuReq"
                   type="text"
-                  value={cpuRequests}
-                  onChange={(e) => setCpuRequests(e.target.value)}
+                  value={cpuRequest}
+                  onChange={(e) => setCpuRequest(e.target.value)}
                 />
               </div>
               <div className="form-group">
@@ -120,8 +120,8 @@ export default function EnvironmentsPage() {
                 <input
                   id="cpuLim"
                   type="text"
-                  value={cpuLimits}
-                  onChange={(e) => setCpuLimits(e.target.value)}
+                  value={cpuLimit}
+                  onChange={(e) => setCpuLimit(e.target.value)}
                 />
               </div>
               <div className="form-group">
@@ -129,8 +129,8 @@ export default function EnvironmentsPage() {
                 <input
                   id="memReq"
                   type="text"
-                  value={memoryRequests}
-                  onChange={(e) => setMemoryRequests(e.target.value)}
+                  value={memoryRequest}
+                  onChange={(e) => setMemoryRequest(e.target.value)}
                 />
               </div>
               <div className="form-group">
@@ -138,8 +138,8 @@ export default function EnvironmentsPage() {
                 <input
                   id="memLim"
                   type="text"
-                  value={memoryLimits}
-                  onChange={(e) => setMemoryLimits(e.target.value)}
+                  value={memoryLimit}
+                  onChange={(e) => setMemoryLimit(e.target.value)}
                 />
               </div>
             </div>

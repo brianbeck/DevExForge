@@ -16,10 +16,10 @@ export default function EnvironmentDetailPage() {
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  const [cpuRequests, setCpuRequests] = useState("");
-  const [cpuLimits, setCpuLimits] = useState("");
-  const [memoryRequests, setMemoryRequests] = useState("");
-  const [memoryLimits, setMemoryLimits] = useState("");
+  const [cpuRequest, setCpuRequest] = useState("");
+  const [cpuLimit, setCpuLimit] = useState("");
+  const [memoryRequest, setMemoryRequest] = useState("");
+  const [memoryLimit, setMemoryLimit] = useState("");
   const [pods, setPods] = useState("");
   const [services, setServices] = useState("");
 
@@ -29,12 +29,12 @@ export default function EnvironmentDetailPage() {
       setLoading(true);
       const data = await getEnvironment(slug, tier);
       setEnv(data);
-      setCpuRequests(data.resourceQuota.cpuRequests);
-      setCpuLimits(data.resourceQuota.cpuLimits);
-      setMemoryRequests(data.resourceQuota.memoryRequests);
-      setMemoryLimits(data.resourceQuota.memoryLimits);
-      setPods(String(data.resourceQuota.pods));
-      setServices(String(data.resourceQuota.services));
+      setCpuRequest(data.resourceQuota?.cpuRequest ?? "");
+      setCpuLimit(data.resourceQuota?.cpuLimit ?? "");
+      setMemoryRequest(data.resourceQuota?.memoryRequest ?? "");
+      setMemoryLimit(data.resourceQuota?.memoryLimit ?? "");
+      setPods(String(data.resourceQuota?.pods ?? ""));
+      setServices(String(data.resourceQuota?.services ?? ""));
       setError(null);
     } catch (err) {
       setError(
@@ -55,10 +55,10 @@ export default function EnvironmentDetailPage() {
     setSaving(true);
     const data: EnvironmentUpdate = {
       resourceQuota: {
-        cpuRequests,
-        cpuLimits,
-        memoryRequests,
-        memoryLimits,
+        cpuRequest,
+        cpuLimit,
+        memoryRequest,
+        memoryLimit,
         pods: parseInt(pods, 10),
         services: parseInt(services, 10),
       },
@@ -158,41 +158,6 @@ export default function EnvironmentDetailPage() {
         </dl>
       </div>
 
-      {env.resourcesCreated &&
-        Object.keys(env.resourcesCreated).length > 0 && (
-          <div className="detail-section">
-            <h3>Resources Created</h3>
-            <table className="table table-compact">
-              <thead>
-                <tr>
-                  <th>Resource</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {Object.entries(env.resourcesCreated).map(
-                  ([resource, created]) => (
-                    <tr key={resource}>
-                      <td className="text-mono">{resource}</td>
-                      <td>
-                        <span
-                          className={`badge ${
-                            created
-                              ? "badge-phase-Active"
-                              : "badge-phase-Pending"
-                          }`}
-                        >
-                          {created ? "Created" : "Pending"}
-                        </span>
-                      </td>
-                    </tr>
-                  )
-                )}
-              </tbody>
-            </table>
-          </div>
-        )}
-
       <div className="detail-section">
         <h3>Resource Quota</h3>
         {editing ? (
@@ -203,8 +168,8 @@ export default function EnvironmentDetailPage() {
                 <input
                   id="edit-cpuReq"
                   type="text"
-                  value={cpuRequests}
-                  onChange={(e) => setCpuRequests(e.target.value)}
+                  value={cpuRequest}
+                  onChange={(e) => setCpuRequest(e.target.value)}
                 />
               </div>
               <div className="form-group">
@@ -212,8 +177,8 @@ export default function EnvironmentDetailPage() {
                 <input
                   id="edit-cpuLim"
                   type="text"
-                  value={cpuLimits}
-                  onChange={(e) => setCpuLimits(e.target.value)}
+                  value={cpuLimit}
+                  onChange={(e) => setCpuLimit(e.target.value)}
                 />
               </div>
               <div className="form-group">
@@ -221,8 +186,8 @@ export default function EnvironmentDetailPage() {
                 <input
                   id="edit-memReq"
                   type="text"
-                  value={memoryRequests}
-                  onChange={(e) => setMemoryRequests(e.target.value)}
+                  value={memoryRequest}
+                  onChange={(e) => setMemoryRequest(e.target.value)}
                 />
               </div>
               <div className="form-group">
@@ -230,8 +195,8 @@ export default function EnvironmentDetailPage() {
                 <input
                   id="edit-memLim"
                   type="text"
-                  value={memoryLimits}
-                  onChange={(e) => setMemoryLimits(e.target.value)}
+                  value={memoryLimit}
+                  onChange={(e) => setMemoryLimit(e.target.value)}
                 />
               </div>
             </div>
@@ -274,42 +239,36 @@ export default function EnvironmentDetailPage() {
             <tbody>
               <tr>
                 <td>CPU Requests</td>
-                <td className="text-mono">{env.resourceQuota.cpuRequests}</td>
+                <td className="text-mono">{env.resourceQuota?.cpuRequest}</td>
               </tr>
               <tr>
                 <td>CPU Limits</td>
-                <td className="text-mono">{env.resourceQuota.cpuLimits}</td>
+                <td className="text-mono">{env.resourceQuota?.cpuLimit}</td>
               </tr>
               <tr>
                 <td>Memory Requests</td>
                 <td className="text-mono">
-                  {env.resourceQuota.memoryRequests}
+                  {env.resourceQuota?.memoryRequest}
                 </td>
               </tr>
               <tr>
                 <td>Memory Limits</td>
                 <td className="text-mono">
-                  {env.resourceQuota.memoryLimits}
+                  {env.resourceQuota?.memoryLimit}
                 </td>
               </tr>
               <tr>
                 <td>Pods</td>
-                <td className="text-mono">{env.resourceQuota.pods}</td>
+                <td className="text-mono">{env.resourceQuota?.pods}</td>
               </tr>
               <tr>
                 <td>Services</td>
-                <td className="text-mono">{env.resourceQuota.services}</td>
+                <td className="text-mono">{env.resourceQuota?.services}</td>
               </tr>
               <tr>
                 <td>PVCs</td>
                 <td className="text-mono">
-                  {env.resourceQuota.persistentVolumeClaims}
-                </td>
-              </tr>
-              <tr>
-                <td>Storage Requests</td>
-                <td className="text-mono">
-                  {env.resourceQuota.storageRequests}
+                  {env.resourceQuota?.persistentVolumeClaims}
                 </td>
               </tr>
             </tbody>

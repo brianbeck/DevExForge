@@ -10,7 +10,6 @@ export default function TeamsListPage() {
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState<TeamCreate>({
-    slug: "",
     displayName: "",
     description: "",
     costCenter: "",
@@ -40,7 +39,7 @@ export default function TeamsListPage() {
     try {
       await createTeam(formData);
       setShowForm(false);
-      setFormData({ slug: "", displayName: "", description: "", costCenter: "" });
+      setFormData({ displayName: "", description: "", costCenter: "" });
       await fetchTeams();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create team");
@@ -67,20 +66,6 @@ export default function TeamsListPage() {
       {showForm && (
         <form className="card form-card" onSubmit={handleCreate}>
           <h3>New Team</h3>
-          <div className="form-group">
-            <label htmlFor="slug">Slug</label>
-            <input
-              id="slug"
-              type="text"
-              required
-              pattern="[a-z0-9-]+"
-              placeholder="my-team"
-              value={formData.slug}
-              onChange={(e) =>
-                setFormData({ ...formData, slug: e.target.value })
-              }
-            />
-          </div>
           <div className="form-group">
             <label htmlFor="displayName">Display Name</label>
             <input

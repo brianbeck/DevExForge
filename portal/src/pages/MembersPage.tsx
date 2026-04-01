@@ -52,10 +52,10 @@ export default function MembersPage() {
     }
   }
 
-  async function handleRoleChange(memberId: string, newRole: string) {
+  async function handleRoleChange(memberEmail: string, newRole: string) {
     if (!slug) return;
     try {
-      await updateMember(slug, memberId, newRole);
+      await updateMember(slug, memberEmail, newRole);
       await fetchMembers();
     } catch (err) {
       setError(
@@ -71,7 +71,7 @@ export default function MembersPage() {
     );
     if (!confirmed) return;
     try {
-      await removeMember(slug, member.id);
+      await removeMember(slug, member.email);
       await fetchMembers();
     } catch (err) {
       setError(
@@ -160,36 +160,30 @@ export default function MembersPage() {
           </thead>
           <tbody>
             {members.map((member) => (
-              <tr key={member.id}>
+              <tr key={member.email}>
                 <td>{member.email}</td>
                 <td>
-                  {member.role === "owner" ? (
-                    <span className="badge badge-owner">owner</span>
-                  ) : (
-                    <select
-                      value={member.role}
-                      onChange={(e) =>
-                        handleRoleChange(member.id, e.target.value)
-                      }
-                    >
-                      {ROLES.map((r) => (
-                        <option key={r} value={r}>
-                          {r}
-                        </option>
-                      ))}
-                    </select>
-                  )}
+                  <select
+                    value={member.role}
+                    onChange={(e) =>
+                      handleRoleChange(member.email, e.target.value)
+                    }
+                  >
+                    {ROLES.map((r) => (
+                      <option key={r} value={r}>
+                        {r}
+                      </option>
+                    ))}
+                  </select>
                 </td>
                 <td>{new Date(member.addedAt).toLocaleDateString()}</td>
                 <td>
-                  {member.role !== "owner" && (
-                    <button
-                      className="btn btn-sm btn-danger"
-                      onClick={() => handleRemove(member)}
-                    >
-                      Remove
-                    </button>
-                  )}
+                  <button
+                    className="btn btn-sm btn-danger"
+                    onClick={() => handleRemove(member)}
+                  >
+                    Remove
+                  </button>
                 </td>
               </tr>
             ))}
