@@ -20,8 +20,5 @@ pgdata/
 .vscode/
 *.swp
 
-# Legacy module (superseded by api/, portal/, operator/, cli/)
-teams-management/
-
 # OS
 .DS_Store
