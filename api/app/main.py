@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.database import init_engine
-from app.routers import health, teams, members, environments, promotion
+from app.routers import health, teams, members, environments, promotion, security, observability, catalog, admin, audit
 from app.routers.members import transfer_router
 
 
@@ -37,3 +37,8 @@ app.include_router(members.router)
 app.include_router(transfer_router)
 app.include_router(environments.router)
 app.include_router(promotion.router)
+app.include_router(security.router)
+app.include_router(observability.router)
+app.include_router(catalog.router)
+app.include_router(admin.router)
+app.include_router(audit.router)

@@ -1,3 +1,4 @@
+{{- if ne (toString .Values.api.enabled) "false" }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -156,3 +157,4 @@ spec:
                 name: devexforge-api
                 port:
                   number: 8000
+{{- end }}

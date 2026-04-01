@@ -173,6 +173,132 @@ class K8sService:
                 )
             raise
 
+    def _get_core_api(self, cluster: str) -> client.CoreV1Api:
+        """Get CoreV1Api for the specified cluster."""
+        # Reuse the api_client from the CustomObjectsApi
+        custom_api = self._get_api(cluster)
+        return client.CoreV1Api(api_client=custom_api.api_client)
+
+    def get_resource_quota_usage(self, cluster: str, namespace: str) -> dict:
+        """Get resource quota status for a namespace."""
+        core = self._get_core_api(cluster)
+        try:
+            quotas = core.list_namespaced_resource_quota(namespace=namespace)
+            if not quotas.items:
+                return {"quotas": []}
+            result = []
+            for q in quotas.items:
+                status = q.status
+                result.append({
+                    "name": q.metadata.name,
+                    "hard": status.hard if status and status.hard else {},
+                    "used": status.used if status and status.used else {},
+                })
+            return {"quotas": result}
+        except ApiException as e:
+            if e.status == 404:
+                return {"quotas": []}
+            raise
+
+    def list_gatekeeper_violations(self, cluster: str, namespace: str) -> list[dict]:
+        """List Gatekeeper constraint violations for a namespace."""
+        api = self._get_api(cluster)
+        violations = []
+        # Check our known constraint types
+        for plural in ("falcorootprevention", "vulnerabilityscan"):
+            try:
+                constraints = api.list_cluster_custom_object(
+                    group="constraints.gatekeeper.sh",
+                    version="v1beta1",
+                    plural=plural,
+                )
+                for c in constraints.get("items", []):
+                    # Filter to constraints scoped to this namespace
+                    match_ns = (
+                        c.get("spec", {})
+                        .get("match", {})
+                        .get("namespaces", [])
+                    )
+                    if namespace not in match_ns:
+                        continue
+                    # Extract violations from status.violations
+                    for v in c.get("status", {}).get("violations", []):
+                        violations.append({
+                            "constraintKind": c["kind"],
+                            "constraintName": c["metadata"]["name"],
+                            "message": v.get("message", ""),
+                            "enforcementAction": v.get("enforcementAction", "deny"),
+                            "resource": {
+                                "kind": v.get("kind", ""),
+                                "namespace": v.get("namespace", ""),
+                                "name": v.get("name", ""),
+                            },
+                        })
+            except ApiException as e:
+                if e.status != 404:
+                    logger.warning("Failed to list %s constraints: %s", plural, e.reason)
+        return violations
+
+    def list_vulnerability_reports(self, cluster: str, namespace: str) -> list[dict]:
+        """List Trivy VulnerabilityReport CRs in a namespace."""
+        api = self._get_api(cluster)
+        try:
+            reports = api.list_namespaced_custom_object(
+                group="aquasecurity.github.io",
+                version="v1alpha1",
+                namespace=namespace,
+                plural="vulnerabilityreports",
+            )
+            results = []
+            for r in reports.get("items", []):
+                report = r.get("report", {})
+                summary = report.get("summary", {})
+                results.append({
+                    "name": r["metadata"]["name"],
+                    "image": r.get("metadata", {}).get("labels", {}).get(
+                        "trivy-operator.resource.name", ""
+                    ),
+                    "critical": summary.get("criticalCount", 0),
+                    "high": summary.get("highCount", 0),
+                    "medium": summary.get("mediumCount", 0),
+                    "low": summary.get("lowCount", 0),
+                    "scanner": report.get("scanner", {}).get("name", "Trivy"),
+                    "updatedAt": report.get("updateTimestamp", ""),
+                })
+            return results
+        except ApiException as e:
+            if e.status == 404:
+                return []
+            raise
+
+    def list_falco_events(self, cluster: str, namespace: str, limit: int = 50) -> list[dict]:
+        """List recent Falco events for a namespace by reading Events of type 'FalcoAlert'."""
+        core = self._get_core_api(cluster)
+        try:
+            events = core.list_namespaced_event(
+                namespace=namespace,
+                field_selector="reason=FalcoAlert",
+                limit=limit,
+            )
+            results = []
+            for e in events.items:
+                results.append({
+                    "timestamp": e.last_timestamp.isoformat() if e.last_timestamp else "",
+                    "message": e.message or "",
+                    "severity": e.type or "Warning",
+                    "source": e.source.component if e.source else "falco",
+                    "involvedObject": {
+                        "kind": e.involved_object.kind if e.involved_object else "",
+                        "name": e.involved_object.name if e.involved_object else "",
+                    },
+                    "count": e.count or 1,
+                })
+            return results
+        except ApiException as e:
+            if e.status == 404:
+                return []
+            raise
+
     def _apply_cluster_crd(self, api, plural: str, name: str, body: dict, cluster: str) -> dict:
         """Create-or-update a cluster-scoped custom resource."""
         try:

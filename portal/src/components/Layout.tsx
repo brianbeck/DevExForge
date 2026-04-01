@@ -25,14 +25,33 @@ export default function Layout() {
             <span className="nav-icon">&#9776;</span>
             Teams
           </NavLink>
-          <span className="nav-link disabled">
+          <NavLink
+            to="/catalog"
+            className={({ isActive }) =>
+              `nav-link${isActive ? " active" : ""}`
+            }
+          >
             <span className="nav-icon">&#9733;</span>
             Catalog
-          </span>
-          <span className="nav-link disabled">
+          </NavLink>
+          <NavLink
+            to="/admin"
+            className={({ isActive }) =>
+              `nav-link${isActive ? " active" : ""}`
+            }
+          >
             <span className="nav-icon">&#9881;</span>
             Admin
-          </span>
+          </NavLink>
+          <NavLink
+            to="/audit"
+            className={({ isActive }) =>
+              `nav-link${isActive ? " active" : ""}`
+            }
+          >
+            <span className="nav-icon">&#9783;</span>
+            Audit Log
+          </NavLink>
         </nav>
       </aside>
       <div className="main-wrapper">

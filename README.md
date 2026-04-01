@@ -147,20 +147,61 @@ docker compose down      # Stop Postgres + Keycloak (keeps data)
 docker compose down -v   # Stop and delete all data
 ```
 
-## Cluster Deployment
-
-The API runs in the production cluster (production SLAs). The operator is deployed per-cluster. Tier mapping:
-
-| Tier | Cluster |
-|------|---------|
-| dev | beck-stage |
-| staging | beck-stage |
-| production | beck-prod |
-
-Deploy via Helm:
+## Running Tests
 
 ```bash
-helm install devexforge deploy/helm/devexforge -f values-prod.yaml
+source .venv/bin/activate
+cd api && python -m pytest tests/ -v
 ```
 
-Or via Argo CD by pointing an Application at `deploy/helm/devexforge/`.
+35 tests covering team CRUD, member management, environment lifecycle, policy floor enforcement, and health endpoints. No external dependencies required.
+
+## CI/CD Pipeline
+
+Travis CI runs on every push to `main`:
+
+| Stage | What It Does |
+|-------|-------------|
+| **test** | Runs `pytest` on the API |
+| **build** | Builds and pushes Docker images to Docker Hub (`brianbeck/devexforge-{api,portal,operator}`) |
+| **scan** | Trivy scans all images, fails the build on CRITICAL CVEs |
+| **deploy** | Updates image tags in [DevExForge-deploy](https://github.com/brianbeck/DevExForge-deploy) for stage (automatic) |
+
+### Travis CI Environment Variables
+
+Set these in the Travis CI project settings:
+
+| Variable | Value |
+|----------|-------|
+| `DOCKER_USERNAME` | Docker Hub username |
+| `DOCKER_PASSWORD` | Docker Hub access token |
+| `GITHUB_TOKEN` | GitHub PAT with repo access (for pushing to DevExForge-deploy) |
+
+## Cluster Deployment
+
+### Setting Up Your Deploy Repo
+
+Run the setup script to generate a private GitOps repo configured for your environment:
+
+```bash
+./dev/init-deploy-repo.sh
+```
+
+It will prompt for your GitHub username, Docker Hub username, cluster contexts, and domain. It creates the repo structure, Argo CD Application manifests, and per-environment Helm values -- all wired to your infrastructure.
+
+Deployments are managed via GitOps through the deploy repo and Argo CD.
+
+The API runs in the production cluster (production SLAs). The operator is deployed per-cluster.
+
+| Tier | Cluster | What Runs |
+|------|---------|-----------|
+| dev | beck-stage | Operator |
+| staging | beck-stage | Operator |
+| production | beck-prod | API, Portal, Operator, PostgreSQL |
+
+### Promotion Flow
+
+```
+Push to main -> Travis CI builds & scans -> Stage auto-deploys via Argo CD
+To promote to prod -> PR to DevExForge-deploy -> Merge -> Manual Argo CD sync
+```

@@ -29,7 +29,16 @@
       "Bash(helm lint:*)",
       "Bash(python3:*)",
       "Bash(pkill -f \"uvicorn app.main:app\")",
-      "Bash(docker compose:*)"
+      "Bash(docker compose:*)",
+      "Bash(pytest tests/ -v)",
+      "Bash(source /Users/beck/src/DevExForge/.venv/bin/activate)",
+      "Bash(pip install:*)",
+      "Bash(python -m pytest tests/ -v)",
+      "Bash(./node_modules/.bin/tsc --noEmit)",
+      "Bash(python -m py_compile app/**/*.py)",
+      "Bash(xargs ls:*)",
+      "Bash(grep -l \"alias=\" /Users/beck/src/DevExForge/api/app/schemas/*.py)",
+      "Bash(grep:*)"
     ]
   }
 }

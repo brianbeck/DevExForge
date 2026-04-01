@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, Link } from "react-router-dom";
 import {
   getEnvironment,
   updateEnvironment,
@@ -127,6 +127,15 @@ export default function EnvironmentDetailPage() {
             Delete
           </button>
         </div>
+      </div>
+
+      <div className="env-nav-links">
+        <Link to={`/teams/${slug}/environments/${tier}/security`}>
+          Security Posture
+        </Link>
+        <Link to={`/teams/${slug}/environments/${tier}/metrics`}>
+          Metrics
+        </Link>
       </div>
 
       {error && <div className="alert alert-error">{error}</div>}

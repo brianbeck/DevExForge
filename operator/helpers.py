@@ -192,7 +192,7 @@ def build_network_policy(
     ]
 
     # Optionally allow all internet egress
-    if spec and spec.get("allowInternetEgress", True):
+    if spec and spec.get("egressAllowInternet", True):
         egress_rules.append({})
 
     return {
@@ -281,7 +281,7 @@ def build_appproject(
     argocd_ns = os.environ.get("ARGOCD_NAMESPACE", "argocd")
     argocd_config = env_spec.get("argoCD", {})
     source_repos = argocd_config.get("sourceRepos", ["*"])
-    team_name = team_spec.get("name", "unknown")
+    team_name = team_spec.get("displayName", "unknown")
     members = team_spec.get("members", [])
 
     # Build roles with policies

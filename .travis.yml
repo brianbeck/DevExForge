@@ -1,0 +1,87 @@
+language: python
+python: "3.12"
+
+services:
+  - docker
+
+env:
+  global:
+    - REGISTRY=brianbeck
+    - API_IMAGE=$REGISTRY/devexforge-api
+    - PORTAL_IMAGE=$REGISTRY/devexforge-portal
+    - OPERATOR_IMAGE=$REGISTRY/devexforge-operator
+    - GITOPS_REPO=brianbeck/DevExForge-deploy
+
+stages:
+  - test
+  - build
+  - scan
+  - deploy
+
+jobs:
+  include:
+    # ---------- Test ----------
+    - stage: test
+      name: "API Tests"
+      install:
+        - pip install -e "./api[test]"
+      script:
+        - cd api && python -m pytest tests/ -v
+
+    # ---------- Build ----------
+    - stage: build
+      name: "Build & Push Images"
+      script:
+        - export TAG=${TRAVIS_TAG:-${TRAVIS_COMMIT:0:7}}
+        - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
+
+        # Build API
+        - docker build -t $API_IMAGE:$TAG -t $API_IMAGE:latest api/
+        - docker push $API_IMAGE:$TAG
+        - docker push $API_IMAGE:latest
+
+        # Build Portal
+        - docker build -t $PORTAL_IMAGE:$TAG -t $PORTAL_IMAGE:latest portal/
+        - docker push $PORTAL_IMAGE:$TAG
+        - docker push $PORTAL_IMAGE:latest
+
+        # Build Operator
+        - docker build -t $OPERATOR_IMAGE:$TAG -t $OPERATOR_IMAGE:latest operator/
+        - docker push $OPERATOR_IMAGE:$TAG
+        - docker push $OPERATOR_IMAGE:latest
+
+    # ---------- Scan ----------
+    - stage: scan
+      name: "Trivy Container Scan"
+      install:
+        - export TAG=${TRAVIS_TAG:-${TRAVIS_COMMIT:0:7}}
+        - curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+      script:
+        - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
+        - trivy image --exit-code 1 --severity CRITICAL $API_IMAGE:$TAG
+        - trivy image --exit-code 1 --severity CRITICAL $PORTAL_IMAGE:$TAG
+        - trivy image --exit-code 1 --severity CRITICAL $OPERATOR_IMAGE:$TAG
+      allow_failure: false
+
+    # ---------- Deploy to Stage ----------
+    - stage: deploy
+      name: "Update Stage Image Tags"
+      if: branch = main AND type = push
+      script:
+        - export TAG=${TRAVIS_TAG:-${TRAVIS_COMMIT:0:7}}
+        - git clone https://${GITHUB_TOKEN}@github.com/${GITOPS_REPO}.git /tmp/gitops
+        - cd /tmp/gitops
+
+        # Update image tags in stage values
+        - >
+          sed -i
+          "s|tag:.*# api|tag: \"$TAG\"  # api|g;
+           s|tag:.*# portal|tag: \"$TAG\"  # portal|g;
+           s|tag:.*# operator|tag: \"$TAG\"  # operator|g"
+          environments/stage/values.yaml
+
+        - git config user.name "Travis CI"
+        - git config user.email "ci@brianbeck.net"
+        - git add -A
+        - "git commit -m \"chore: update stage images to $TAG [skip ci]\" || echo 'No changes'"
+        - git push

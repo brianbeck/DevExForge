@@ -1,12 +1,11 @@
 export interface ResourceQuotaSpec {
-  cpuRequests: string;
-  cpuLimits: string;
-  memoryRequests: string;
-  memoryLimits: string;
+  cpuRequest: string;
+  cpuLimit: string;
+  memoryRequest: string;
+  memoryLimit: string;
   pods: number;
   services: number;
   persistentVolumeClaims: number;
-  storageRequests: string;
 }
 
 export interface LimitRangeSpec {
@@ -14,54 +13,55 @@ export interface LimitRangeSpec {
   defaultCpuLimit: string;
   defaultMemoryRequest: string;
   defaultMemoryLimit: string;
-  maxCpuLimit: string;
-  maxMemoryLimit: string;
 }
 
 export interface NetworkPolicySpec {
   allowInterNamespace: boolean;
   allowedNamespaces: string[];
-  allowedExternalCidrs: string[];
-  denyAllEgress: boolean;
+  egressAllowInternet: boolean;
 }
 
 export interface PoliciesSpec {
-  allowPrivilegedContainers: boolean;
-  allowHostNetwork: boolean;
-  allowedImageRegistries: string[];
-  requiredLabels: string[];
+  maxCriticalCVEs: number;
+  maxHighCVEs: number;
+  requireNonRoot: boolean;
+  requireReadOnlyRoot: boolean;
+  requireResourceLimits: boolean;
+  exemptions?: {
+    exemptImages: string[];
+    exemptNamespaces: string[];
+  } | null;
 }
 
 export interface ArgoCDSpec {
   enabled: boolean;
-  project: string;
   sourceRepos: string[];
-  destinations: string[];
+  allowedClusterResources: { group: string; kind: string }[];
 }
 
 export interface Environment {
   id: string;
   teamSlug: string;
-  tier: "dev" | "staging" | "prod";
+  tier: "dev" | "staging" | "production";
   namespaceName: string;
-  phase: "Pending" | "Active" | "Error" | "Deleting";
-  resourceQuota: ResourceQuotaSpec;
-  limitRange: LimitRangeSpec;
-  networkPolicy: NetworkPolicySpec;
-  policies: PoliciesSpec;
-  argocd: ArgoCDSpec;
-  resourcesCreated: Record<string, boolean>;
+  cluster: string | null;
+  phase: "Pending" | "Provisioning" | "Active" | "Error" | "Deleting";
+  resourceQuota: ResourceQuotaSpec | null;
+  limitRange: LimitRangeSpec | null;
+  networkPolicy: NetworkPolicySpec | null;
+  policies: PoliciesSpec | null;
+  argoCD: ArgoCDSpec | null;
   createdAt: string;
   updatedAt: string;
 }
 
 export interface EnvironmentCreate {
-  tier: "dev" | "staging" | "prod";
+  tier: "dev" | "staging" | "production";
   resourceQuota?: Partial<ResourceQuotaSpec>;
   limitRange?: Partial<LimitRangeSpec>;
   networkPolicy?: Partial<NetworkPolicySpec>;
   policies?: Partial<PoliciesSpec>;
-  argocd?: Partial<ArgoCDSpec>;
+  argoCD?: Partial<ArgoCDSpec>;
 }
 
 export interface EnvironmentUpdate {
@@ -69,13 +69,13 @@ export interface EnvironmentUpdate {
   limitRange?: Partial<LimitRangeSpec>;
   networkPolicy?: Partial<NetworkPolicySpec>;
   policies?: Partial<PoliciesSpec>;
-  argocd?: Partial<ArgoCDSpec>;
+  argoCD?: Partial<ArgoCDSpec>;
 }
 
 export interface Member {
-  id: string;
   email: string;
-  role: "owner" | "admin" | "developer" | "viewer";
+  keycloakId: string | null;
+  role: "admin" | "developer" | "viewer";
   addedAt: string;
 }
 
@@ -85,12 +85,13 @@ export interface MemberCreate {
 }
 
 export interface Team {
+  id: string;
   slug: string;
   displayName: string;
-  description: string;
-  ownerEmail: string;
-  costCenter: string;
+  description: string | null;
+  costCenter: string | null;
   tags: Record<string, string>;
+  ownerEmail: string;
   memberCount: number;
   environmentCount: number;
   createdAt: string;
@@ -98,7 +99,6 @@ export interface Team {
 }
 
 export interface TeamCreate {
-  slug: string;
   displayName: string;
   description?: string;
   costCenter?: string;
@@ -115,6 +115,4 @@ export interface TeamUpdate {
 export interface TeamListResponse {
   teams: Team[];
   total: number;
-  page: number;
-  pageSize: number;
 }

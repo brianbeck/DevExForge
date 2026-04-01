@@ -602,3 +602,241 @@ select:focus {
     grid-template-columns: 1fr;
   }
 }
+
+/* ── Compliance Score ─────────────────────────────────────── */
+.compliance-card {
+  display: flex;
+  align-items: center;
+  gap: 2rem;
+  padding: 1.5rem;
+  border-radius: 8px;
+  margin-bottom: 1.5rem;
+}
+.compliance-card.compliant { background: var(--success-bg, #e6f4ea); border: 1px solid #34a853; }
+.compliance-card.warning { background: var(--warning-bg, #fef7e0); border: 1px solid #fbbc04; }
+.compliance-card.critical { background: var(--error-bg, #fce8e6); border: 1px solid #ea4335; }
+
+.score-circle {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  font-weight: bold;
+  color: white;
+  flex-shrink: 0;
+}
+.score-circle.compliant { background: #34a853; }
+.score-circle.warning { background: #fbbc04; color: #333; }
+.score-circle.critical { background: #ea4335; }
+
+.compliance-stats {
+  display: flex;
+  gap: 2rem;
+  flex-wrap: wrap;
+}
+.compliance-stat {
+  text-align: center;
+}
+.compliance-stat .value {
+  font-size: 1.5rem;
+  font-weight: bold;
+}
+.compliance-stat .label {
+  font-size: 0.85rem;
+  color: var(--text-secondary, #666);
+}
+
+/* ── Severity Badges ──────────────────────────────────────── */
+.severity-critical { background: #ea4335; color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.8rem; }
+.severity-high { background: #ff6d01; color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.8rem; }
+.severity-medium { background: #fbbc04; color: #333; padding: 2px 8px; border-radius: 4px; font-size: 0.8rem; }
+.severity-low { background: #34a853; color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.8rem; }
+
+/* ── Resource Usage Bar ───────────────────────────────────── */
+.usage-bar-container {
+  width: 100%;
+  height: 8px;
+  background: var(--border, #e0e0e0);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.usage-bar {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.3s;
+}
+.usage-bar.low { background: #34a853; }
+.usage-bar.medium { background: #fbbc04; }
+.usage-bar.high { background: #ea4335; }
+
+/* ── Dashboard Links ──────────────────────────────────────── */
+.dashboard-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 1rem;
+}
+.dashboard-link {
+  display: block;
+  padding: 1rem;
+  border: 1px solid var(--border, #e0e0e0);
+  border-radius: 8px;
+  text-decoration: none;
+  color: var(--text, #333);
+  transition: border-color 0.2s;
+}
+.dashboard-link:hover {
+  border-color: var(--primary, #1a73e8);
+}
+
+/* ── Metric Cards ─────────────────────────────────────────── */
+.metric-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+.metric-card {
+  padding: 1.5rem;
+  border: 1px solid var(--border, #e0e0e0);
+  border-radius: 8px;
+  text-align: center;
+}
+.metric-card .value {
+  font-size: 2rem;
+  font-weight: bold;
+  color: var(--primary, #1a73e8);
+}
+.metric-card .label {
+  font-size: 0.85rem;
+  color: var(--text-secondary, #666);
+  margin-top: 0.5rem;
+}
+
+/* ── Environment Nav Links ────────────────────────────────── */
+.env-nav-links {
+  display: flex;
+  gap: 1rem;
+  margin: 1rem 0;
+}
+.env-nav-links a {
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--border, #e0e0e0);
+  border-radius: 6px;
+  text-decoration: none;
+  color: var(--primary, #1a73e8);
+  font-weight: 500;
+  transition: background 0.2s;
+}
+.env-nav-links a:hover {
+  background: var(--primary, #1a73e8);
+  color: white;
+}
+
+/* ── Catalog ─────────────────────────────────────────────── */
+.catalog-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1.5rem;
+}
+.template-card {
+  border: 1px solid var(--border, #e0e0e0);
+  border-radius: 8px;
+  padding: 1.5rem;
+  cursor: pointer;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  background: var(--surface);
+}
+.template-card:hover {
+  border-color: var(--primary, #1a73e8);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+.template-card.active {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px var(--primary);
+}
+.template-card .category {
+  display: inline-block;
+  padding: 2px 8px;
+  background: var(--primary, #1a73e8);
+  color: white;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+.template-detail {
+  margin-top: 1.5rem;
+  padding: 1.5rem;
+  border: 1px solid var(--border, #e0e0e0);
+  border-radius: 8px;
+  background: var(--surface, #f8f9fa);
+}
+
+/* ── Deploy form ─────────────────────────────────────────── */
+.deploy-form {
+  display: grid;
+  gap: 1rem;
+  max-width: 500px;
+}
+
+/* ── Audit log ───────────────────────────────────────────── */
+.audit-filters {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+.audit-filters input,
+.audit-filters select {
+  padding: 0.5rem;
+  border: 1px solid var(--border, #e0e0e0);
+  border-radius: 4px;
+}
+.audit-expandable {
+  cursor: pointer;
+}
+.audit-expandable:hover {
+  background: var(--surface, #f8f9fa);
+}
+.audit-detail {
+  padding: 1rem;
+  background: var(--surface, #f8f9fa);
+  border-top: 1px solid var(--border, #e0e0e0);
+}
+.audit-detail pre {
+  background: #1e1e1e;
+  color: #d4d4d4;
+  padding: 1rem;
+  border-radius: 4px;
+  overflow-x: auto;
+  font-size: 0.85rem;
+}
+.pagination {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  justify-content: center;
+  margin-top: 1rem;
+}
+
+/* ── Admin tabs ──────────────────────────────────────────── */
+.admin-section {
+  margin-top: 1.5rem;
+}
+.admin-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 1rem;
+  padding: 1rem;
+  border: 1px solid var(--border, #e0e0e0);
+  border-radius: 8px;
+  margin-bottom: 1.5rem;
+}
+.admin-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.85rem;
+}

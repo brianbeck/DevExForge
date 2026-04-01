@@ -1,3 +1,4 @@
+{{- if ne (toString .Values.portal.enabled) "false" }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -83,3 +84,4 @@ spec:
                 name: devexforge-portal
                 port:
                   number: 80
+{{- end }}
