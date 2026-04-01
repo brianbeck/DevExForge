@@ -49,7 +49,7 @@ jobs:
     - stage: scan
       name: "Trivy Container Scan"
       install:
-        - curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+        - curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sudo sh -s -- -b /usr/local/bin
       script:
         - export TAG=${TRAVIS_TAG:-${TRAVIS_COMMIT:0:7}}
         - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
