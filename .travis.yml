@@ -67,12 +67,7 @@ jobs:
         - git clone https://x-access-token:${GITHUB_TOKEN_DEVEXFORGE}@github.com/${GITOPS_REPO}.git /tmp/gitops
         - cd /tmp/gitops
         - git checkout main
-        - >
-          sed -i
-          "s|tag:.*# api|tag: \"$TAG\"  # api|g;
-           s|tag:.*# portal|tag: \"$TAG\"  # portal|g;
-           s|tag:.*# operator|tag: \"$TAG\"  # operator|g"
-          environments/stage/values.yaml
+        - sed -i "s|tag:.*# api|tag: \"$TAG\"  # api|g; s|tag:.*# portal|tag: \"$TAG\"  # portal|g; s|tag:.*# operator|tag: \"$TAG\"  # operator|g" environments/stage/values.yaml
         - git config user.name "Travis CI"
         - git config user.email "ci@brianbeck.net"
         - git add -A
