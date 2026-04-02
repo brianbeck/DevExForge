@@ -23,10 +23,11 @@ export async function loadConfig(): Promise<RuntimeConfig> {
     // Fall through to defaults
   }
 
-  // Defaults for local development
+  // Defaults for local development only
+  const isLocal = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
   _config = {
-    apiBaseUrl: import.meta.env.VITE_API_BASE_URL || "http://localhost:8000",
-    keycloakUrl: import.meta.env.VITE_KEYCLOAK_URL || "http://localhost:8080",
+    apiBaseUrl: import.meta.env.VITE_API_BASE_URL || (isLocal ? "http://localhost:8000" : ""),
+    keycloakUrl: import.meta.env.VITE_KEYCLOAK_URL || (isLocal ? "http://localhost:8080" : ""),
   };
   return _config;
 }
@@ -34,10 +35,10 @@ export async function loadConfig(): Promise<RuntimeConfig> {
 // Synchronous access after loadConfig() has been called
 export function getConfig(): RuntimeConfig {
   if (!_config) {
-    // Fallback for local dev where loadConfig may not have been called
+    const isLocal = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
     return {
-      apiBaseUrl: import.meta.env.VITE_API_BASE_URL || "http://localhost:8000",
-      keycloakUrl: import.meta.env.VITE_KEYCLOAK_URL || "http://localhost:8080",
+      apiBaseUrl: import.meta.env.VITE_API_BASE_URL || (isLocal ? "http://localhost:8000" : ""),
+      keycloakUrl: import.meta.env.VITE_KEYCLOAK_URL || (isLocal ? "http://localhost:8080" : ""),
     };
   }
   return _config;
