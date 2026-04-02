@@ -28,7 +28,7 @@ router = APIRouter(prefix="/api/v1/admin", tags=["admin"])
 # --- Quota Presets ---
 
 
-@router.get("/quota-presets", response_model=list[QuotaPresetResponse])
+@router.get("/quota-presets")
 async def list_quota_presets(
     user: Annotated[CurrentUser, Depends(require_role("admin"))],
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -41,7 +41,6 @@ async def list_quota_presets(
 @router.post(
     "/quota-presets",
     status_code=status.HTTP_201_CREATED,
-    response_model=QuotaPresetResponse,
 )
 async def create_quota_preset(
     data: QuotaPresetCreate,
@@ -110,7 +109,7 @@ async def delete_quota_preset(
 # --- Policy Profiles ---
 
 
-@router.get("/policy-profiles", response_model=list[PolicyProfileResponse])
+@router.get("/policy-profiles")
 async def list_policy_profiles(
     user: Annotated[CurrentUser, Depends(require_role("admin"))],
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -123,7 +122,6 @@ async def list_policy_profiles(
 @router.post(
     "/policy-profiles",
     status_code=status.HTTP_201_CREATED,
-    response_model=PolicyProfileResponse,
 )
 async def create_policy_profile(
     data: PolicyProfileCreate,
@@ -190,7 +188,7 @@ async def delete_policy_profile(
 # --- Admin Team Overview ---
 
 
-@router.get("/teams", response_model=list[AdminTeamSummary])
+@router.get("/teams")
 async def list_all_teams(
     user: Annotated[CurrentUser, Depends(require_role("admin"))],
     db: Annotated[AsyncSession, Depends(get_db)],

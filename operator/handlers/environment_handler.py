@@ -129,59 +129,13 @@ async def environment_update(spec, old, new, diff, name, namespace, patch, **_kw
     changed_fields = {field_path[1] for op, field_path, _, _ in diff if len(field_path) > 1 and field_path[0] == "spec"}
 
     if "resourceQuota" in changed_fields:
-        logger.info("ResourceQuota changed for %s, patching", namespace_name)
-        quota = build_resource_quota(namespace_name, spec.get("resourceQuota"))
-        try:
-            core_api.replace_namespaced_resource_quota(
-                name="default",
-                namespace=namespace_name,
-                body=quota,
-            )
-        except ApiException as e:
-            if e.status == 404:
-                core_api.create_namespaced_resource_quota(
-                    namespace=namespace_name,
-                    body=quota,
-                )
-            else:
-                raise
+        _reconcile_quota(core_api, namespace_name, spec)
 
     if "limitRange" in changed_fields:
-        logger.info("LimitRange changed for %s, patching", namespace_name)
-        lr = build_limit_range(namespace_name, spec.get("limitRange"))
-        try:
-            core_api.replace_namespaced_limit_range(
-                name="default",
-                namespace=namespace_name,
-                body=lr,
-            )
-        except ApiException as e:
-            if e.status == 404:
-                core_api.create_namespaced_limit_range(
-                    namespace=namespace_name,
-                    body=lr,
-                )
-            else:
-                raise
+        _reconcile_limit_range(core_api, namespace_name, spec)
 
     if "networkPolicy" in changed_fields:
-        logger.info("NetworkPolicy changed for %s, patching", namespace_name)
-        ingress_ns = os.environ.get("DEFAULT_INGRESS_NAMESPACE", "traefik")
-        netpol = build_network_policy(namespace_name, spec.get("networkPolicy"), ingress_ns)
-        try:
-            net_api.replace_namespaced_network_policy(
-                name="default",
-                namespace=namespace_name,
-                body=netpol,
-            )
-        except ApiException as e:
-            if e.status == 404:
-                net_api.create_namespaced_network_policy(
-                    namespace=namespace_name,
-                    body=netpol,
-                )
-            else:
-                raise
+        _reconcile_network_policy(net_api, namespace_name, spec)
 
     if "policies" in changed_fields:
         logger.info("Policies changed for %s, reconciling Gatekeeper constraints", namespace_name)
@@ -191,13 +145,7 @@ async def environment_update(spec, old, new, diff, name, namespace, patch, **_kw
             logger.warning("Gatekeeper constraints could not be updated for %s", namespace_name, exc_info=True)
 
     if "argoCD" in changed_fields:
-        argocd_config = spec.get("argoCD", {})
-        if argocd_config.get("enabled", False):
-            logger.info("ArgoCD config changed for %s, reconciling AppProject", namespace_name)
-            _create_appproject(custom_api, namespace_name, team_spec, spec)
-        else:
-            logger.info("ArgoCD disabled for %s, removing AppProject", namespace_name)
-            _delete_appproject(custom_api, namespace_name)
+        _reconcile_argocd(custom_api, namespace_name, team_spec, spec)
 
     # Always re-reconcile RBAC if triggered by annotation (members changed on Team CR)
     # or if teamRef changed
@@ -219,6 +167,77 @@ async def environment_update(spec, old, new, diff, name, namespace, patch, **_kw
     ]
 
     logger.info("Environment %s updated", name)
+
+
+def _replace_or_create(replace_fn, create_fn, resource_label: str, namespace_name: str) -> None:
+    """Try to replace a resource; if it doesn't exist, create it instead."""
+    try:
+        replace_fn()
+    except ApiException as e:
+        if e.status == 404:
+            create_fn()
+        else:
+            raise
+
+
+def _reconcile_quota(core_api, namespace_name: str, spec: dict) -> None:
+    """Reconcile ResourceQuota for a namespace."""
+    logger.info("ResourceQuota changed for %s, patching", namespace_name)
+    quota = build_resource_quota(namespace_name, spec.get("resourceQuota"))
+    _replace_or_create(
+        replace_fn=lambda: core_api.replace_namespaced_resource_quota(
+            name="default", namespace=namespace_name, body=quota,
+        ),
+        create_fn=lambda: core_api.create_namespaced_resource_quota(
+            namespace=namespace_name, body=quota,
+        ),
+        resource_label="ResourceQuota",
+        namespace_name=namespace_name,
+    )
+
+
+def _reconcile_limit_range(core_api, namespace_name: str, spec: dict) -> None:
+    """Reconcile LimitRange for a namespace."""
+    logger.info("LimitRange changed for %s, patching", namespace_name)
+    lr = build_limit_range(namespace_name, spec.get("limitRange"))
+    _replace_or_create(
+        replace_fn=lambda: core_api.replace_namespaced_limit_range(
+            name="default", namespace=namespace_name, body=lr,
+        ),
+        create_fn=lambda: core_api.create_namespaced_limit_range(
+            namespace=namespace_name, body=lr,
+        ),
+        resource_label="LimitRange",
+        namespace_name=namespace_name,
+    )
+
+
+def _reconcile_network_policy(net_api, namespace_name: str, spec: dict) -> None:
+    """Reconcile NetworkPolicy for a namespace."""
+    logger.info("NetworkPolicy changed for %s, patching", namespace_name)
+    ingress_ns = os.environ.get("DEFAULT_INGRESS_NAMESPACE", "traefik")
+    netpol = build_network_policy(namespace_name, spec.get("networkPolicy"), ingress_ns)
+    _replace_or_create(
+        replace_fn=lambda: net_api.replace_namespaced_network_policy(
+            name="default", namespace=namespace_name, body=netpol,
+        ),
+        create_fn=lambda: net_api.create_namespaced_network_policy(
+            namespace=namespace_name, body=netpol,
+        ),
+        resource_label="NetworkPolicy",
+        namespace_name=namespace_name,
+    )
+
+
+def _reconcile_argocd(custom_api, namespace_name: str, team_spec: dict, spec: dict) -> None:
+    """Reconcile Argo CD AppProject based on argoCD config."""
+    argocd_config = spec.get("argoCD", {})
+    if argocd_config.get("enabled", False):
+        logger.info("ArgoCD config changed for %s, reconciling AppProject", namespace_name)
+        _create_appproject(custom_api, namespace_name, team_spec, spec)
+    else:
+        logger.info("ArgoCD disabled for %s, removing AppProject", namespace_name)
+        _delete_appproject(custom_api, namespace_name)
 
 
 @kopf.on.delete(GROUP, VERSION, PLURAL_ENVIRONMENTS)
@@ -398,50 +417,54 @@ def _reconcile_role_bindings(rbac_api, namespace_name: str, members: list[dict])
     desired_bindings = build_role_bindings_for_team(namespace_name, members)
 
     # Delete existing devexforge-managed bindings first
+    _delete_managed_role_bindings(rbac_api, namespace_name)
+
+    # Create new bindings
+    for binding in desired_bindings:
+        _create_or_replace_role_binding(rbac_api, namespace_name, binding)
+
+
+def _delete_managed_role_bindings(rbac_api, namespace_name: str) -> None:
+    """Delete all devexforge-managed RoleBindings, ignoring NotFound errors."""
     try:
         existing = rbac_api.list_namespaced_role_binding(
             namespace=namespace_name,
             label_selector="devexforge.brianbeck.net/managed-by=devexforge-operator",
         )
-        for binding in existing.items:
-            try:
-                rbac_api.delete_namespaced_role_binding(
-                    name=binding.metadata.name,
-                    namespace=namespace_name,
-                )
-            except ApiException as e:
-                if e.status != 404:
-                    raise
     except ApiException as e:
-        if e.status != 404:
-            raise
+        if e.status == 404:
+            return
+        raise
 
-    # Create new bindings
-    for binding in desired_bindings:
+    for binding in existing.items:
         try:
-            rbac_api.create_namespaced_role_binding(
+            rbac_api.delete_namespaced_role_binding(
+                name=binding.metadata.name,
+                namespace=namespace_name,
+            )
+        except ApiException as e:
+            if e.status != 404:
+                raise
+
+
+def _create_or_replace_role_binding(rbac_api, namespace_name: str, binding) -> None:
+    """Create a RoleBinding, replacing it if it already exists."""
+    try:
+        rbac_api.create_namespaced_role_binding(
+            namespace=namespace_name,
+            body=binding,
+        )
+        logger.info("Created RoleBinding %s in %s", binding.metadata.name, namespace_name)
+    except ApiException as e:
+        if e.status == 409:
+            rbac_api.replace_namespaced_role_binding(
+                name=binding.metadata.name,
                 namespace=namespace_name,
                 body=binding,
             )
-            logger.info(
-                "Created RoleBinding %s in %s",
-                binding.metadata.name,
-                namespace_name,
-            )
-        except ApiException as e:
-            if e.status == 409:
-                rbac_api.replace_namespaced_role_binding(
-                    name=binding.metadata.name,
-                    namespace=namespace_name,
-                    body=binding,
-                )
-                logger.info(
-                    "Replaced RoleBinding %s in %s",
-                    binding.metadata.name,
-                    namespace_name,
-                )
-            else:
-                raise
+            logger.info("Replaced RoleBinding %s in %s", binding.metadata.name, namespace_name)
+        else:
+            raise
 
 
 def _create_appproject(

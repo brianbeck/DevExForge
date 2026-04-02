@@ -45,7 +45,7 @@ def _check_team_permission(team, user: CurrentUser) -> None:
     )
 
 
-@router.post("", status_code=status.HTTP_201_CREATED, response_model=TeamResponse)
+@router.post("", status_code=status.HTTP_201_CREATED)
 async def create_team(
     data: TeamCreate,
     user: Annotated[CurrentUser, Depends(require_role("team-leader"))],
@@ -73,7 +73,7 @@ async def create_team(
     return _team_to_response(team)
 
 
-@router.get("", response_model=TeamListResponse)
+@router.get("")
 async def list_teams(
     user: Annotated[CurrentUser, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -85,7 +85,7 @@ async def list_teams(
     )
 
 
-@router.get("/{slug}", response_model=TeamResponse)
+@router.get("/{slug}")
 async def get_team(
     slug: str,
     user: Annotated[CurrentUser, Depends(get_current_user)],
@@ -97,7 +97,7 @@ async def get_team(
     return _team_to_response(team)
 
 
-@router.patch("/{slug}", response_model=TeamResponse)
+@router.patch("/{slug}")
 async def update_team(
     slug: str,
     data: TeamUpdate,

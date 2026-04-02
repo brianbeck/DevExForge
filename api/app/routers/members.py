@@ -55,7 +55,7 @@ async def _sync_team_crd(slug: str, db: AsyncSession) -> None:
             logger.warning("Failed to sync Team CRD for '%s'", slug, exc_info=True)
 
 
-@router.post("", status_code=status.HTTP_201_CREATED, response_model=MemberResponse)
+@router.post("", status_code=status.HTTP_201_CREATED)
 async def add_member(
     slug: str,
     data: MemberCreate,
@@ -84,7 +84,7 @@ async def add_member(
     return _member_to_response(member)
 
 
-@router.get("", response_model=list[MemberResponse])
+@router.get("")
 async def list_members(
     slug: str,
     user: Annotated[CurrentUser, Depends(get_current_user)],
@@ -97,7 +97,7 @@ async def list_members(
     return [_member_to_response(m) for m in members]
 
 
-@router.patch("/{email}", response_model=MemberResponse)
+@router.patch("/{email}")
 async def update_member_role(
     slug: str,
     email: str,

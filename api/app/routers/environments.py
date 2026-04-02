@@ -58,7 +58,7 @@ async def _check_team_permission(slug: str, user: CurrentUser, db: AsyncSession)
     )
 
 
-@router.post("", status_code=status.HTTP_201_CREATED, response_model=EnvironmentResponse)
+@router.post("", status_code=status.HTTP_201_CREATED)
 async def create_environment(
     slug: str,
     data: EnvironmentCreate,
@@ -91,7 +91,7 @@ async def create_environment(
     return _env_to_response(env, slug)
 
 
-@router.get("", response_model=list[EnvironmentResponse])
+@router.get("")
 async def list_environments(
     slug: str,
     user: Annotated[CurrentUser, Depends(get_current_user)],
@@ -104,7 +104,7 @@ async def list_environments(
     return [_env_to_response(e, slug) for e in envs]
 
 
-@router.get("/{tier}", response_model=EnvironmentResponse)
+@router.get("/{tier}")
 async def get_environment(
     slug: str,
     tier: str,
@@ -120,7 +120,7 @@ async def get_environment(
     return _env_to_response(env, slug)
 
 
-@router.patch("/{tier}", response_model=EnvironmentResponse)
+@router.patch("/{tier}")
 async def update_environment(
     slug: str,
     tier: str,

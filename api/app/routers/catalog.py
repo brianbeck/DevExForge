@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["catalog"])
 
 
-@router.get("/api/v1/catalog/templates", response_model=list[TemplateResponse])
+@router.get("/api/v1/catalog/templates")
 async def list_templates(
     user: Annotated[CurrentUser, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -34,7 +34,7 @@ async def list_templates(
     return [TemplateResponse.model_validate(t) for t in templates]
 
 
-@router.get("/api/v1/catalog/templates/{template_id}", response_model=TemplateResponse)
+@router.get("/api/v1/catalog/templates/{template_id}")
 async def get_template(
     template_id: UUID,
     user: Annotated[CurrentUser, Depends(get_current_user)],
@@ -52,7 +52,6 @@ async def get_template(
 @router.post(
     "/api/v1/catalog/templates",
     status_code=status.HTTP_201_CREATED,
-    response_model=TemplateResponse,
 )
 async def create_template(
     data: TemplateCreate,
@@ -124,7 +123,6 @@ async def delete_template(
 @router.post(
     "/api/v1/teams/{slug}/environments/{tier}/deploy",
     status_code=status.HTTP_201_CREATED,
-    response_model=DeployResponse,
 )
 async def deploy_from_template(
     slug: str,
@@ -133,50 +131,7 @@ async def deploy_from_template(
     user: Annotated[CurrentUser, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> DeployResponse:
-    # Verify team exists
-    team_result = await db.execute(select(Team).where(Team.slug == slug))
-    team = team_result.scalar_one_or_none()
-    if team is None:
-        raise HTTPException(status_code=404, detail="Team not found")
-
-    # Check user is a member or admin
-    if "admin" not in user.roles:
-        if team.owner_email != user.email:
-            has_access = False
-            for m in (team.members or []):
-                if m.email == user.email:
-                    has_access = True
-                    break
-            if not has_access:
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="You do not have permission to deploy to this team",
-                )
-
-    # Verify environment exists
-    env_result = await db.execute(
-        select(Environment).where(
-            Environment.team_id == team.id,
-            Environment.tier == tier,
-        )
-    )
-    env = env_result.scalar_one_or_none()
-    if env is None:
-        raise HTTPException(status_code=404, detail=f"Environment '{tier}' not found for team '{slug}'")
-
-    # Get template
-    tmpl_result = await db.execute(
-        select(CatalogTemplate).where(CatalogTemplate.id == data.template_id)
-    )
-    template = tmpl_result.scalar_one_or_none()
-    if template is None:
-        raise HTTPException(status_code=404, detail="Template not found")
-
-    if not template.chart_repo or not template.chart_name:
-        raise HTTPException(
-            status_code=400,
-            detail="Template is missing chart_repo or chart_name configuration",
-        )
+    team, env, template = await _validate_deploy_request(db, slug, tier, data.template_id, user)
 
     # Merge values: template defaults + user overrides
     merged_values = dict(template.default_values or {})
@@ -188,42 +143,8 @@ async def deploy_from_template(
     namespace = env.namespace_name
     app_name = f"{slug}-{data.app_name}"
 
-    # Build Argo CD Application CR
-    argo_app = {
-        "apiVersion": "argoproj.io/v1alpha1",
-        "kind": "Application",
-        "metadata": {
-            "name": app_name,
-            "namespace": "argocd",
-            "labels": {
-                "devexforge.io/team": slug,
-                "devexforge.io/tier": tier,
-                "devexforge.io/template": template.name,
-            },
-        },
-        "spec": {
-            "project": "default",
-            "source": {
-                "repoURL": template.chart_repo,
-                "chart": template.chart_name,
-                "targetRevision": template.chart_version or "*",
-                "helm": {
-                    "values": _dict_to_yaml(merged_values),
-                },
-            },
-            "destination": {
-                "server": "https://kubernetes.default.svc",
-                "namespace": namespace,
-            },
-            "syncPolicy": {
-                "automated": {
-                    "prune": True,
-                    "selfHeal": True,
-                },
-                "syncOptions": ["CreateNamespace=false"],
-            },
-        },
-    }
+    # Build and apply Argo CD Application CR
+    argo_app = _build_argo_application(template, env, slug, tier, app_name, merged_values)
 
     try:
         k8s_service.create_argo_application(cluster, "argocd", argo_app)
@@ -258,6 +179,110 @@ async def deploy_from_template(
     )
 
 
+async def _validate_deploy_request(
+    db: AsyncSession, slug: str, tier: str, template_id: UUID, user: CurrentUser
+) -> tuple[Team, Environment, CatalogTemplate]:
+    """Validate team membership, environment existence, and template existence."""
+    # Verify team exists
+    team_result = await db.execute(select(Team).where(Team.slug == slug))
+    team = team_result.scalar_one_or_none()
+    if team is None:
+        raise HTTPException(status_code=404, detail="Team not found")
+
+    # Check user is a member or admin
+    if "admin" not in user.roles:
+        is_member = team.owner_email == user.email or any(
+            m.email == user.email for m in (team.members or [])
+        )
+        if not is_member:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You do not have permission to deploy to this team",
+            )
+
+    # Verify environment exists
+    env_result = await db.execute(
+        select(Environment).where(
+            Environment.team_id == team.id,
+            Environment.tier == tier,
+        )
+    )
+    env = env_result.scalar_one_or_none()
+    if env is None:
+        raise HTTPException(status_code=404, detail=f"Environment '{tier}' not found for team '{slug}'")
+
+    # Get template
+    tmpl_result = await db.execute(
+        select(CatalogTemplate).where(CatalogTemplate.id == template_id)
+    )
+    template = tmpl_result.scalar_one_or_none()
+    if template is None:
+        raise HTTPException(status_code=404, detail="Template not found")
+
+    if not template.chart_repo or not template.chart_name:
+        raise HTTPException(
+            status_code=400,
+            detail="Template is missing chart_repo or chart_name configuration",
+        )
+
+    return team, env, template
+
+
+def _build_argo_application(
+    template: CatalogTemplate,
+    env: Environment,
+    slug: str,
+    tier: str,
+    app_name: str,
+    values: dict,
+) -> dict:
+    """Build the Argo CD Application custom resource dict."""
+    return {
+        "apiVersion": "argoproj.io/v1alpha1",
+        "kind": "Application",
+        "metadata": {
+            "name": app_name,
+            "namespace": "argocd",
+            "labels": {
+                "devexforge.io/team": slug,
+                "devexforge.io/tier": tier,
+                "devexforge.io/template": template.name,
+            },
+        },
+        "spec": {
+            "project": "default",
+            "source": {
+                "repoURL": template.chart_repo,
+                "chart": template.chart_name,
+                "targetRevision": template.chart_version or "*",
+                "helm": {
+                    "values": _dict_to_yaml(values),
+                },
+            },
+            "destination": {
+                "server": "https://kubernetes.default.svc",
+                "namespace": env.namespace_name,
+            },
+            "syncPolicy": {
+                "automated": {
+                    "prune": True,
+                    "selfHeal": True,
+                },
+                "syncOptions": ["CreateNamespace=false"],
+            },
+        },
+    }
+
+
+def _scalar_to_yaml(value: object) -> str:
+    """Convert a scalar Python value to its YAML string representation."""
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if value is None:
+        return "null"
+    return str(value)
+
+
 def _dict_to_yaml(d: dict, indent: int = 0) -> str:
     """Convert a flat/nested dict to YAML-like string for Helm values."""
     lines = []
@@ -274,10 +299,6 @@ def _dict_to_yaml(d: dict, indent: int = 0) -> str:
                     lines.append(_dict_to_yaml(item, indent + 1))
                 else:
                     lines.append(f"{prefix}- {item}")
-        elif isinstance(value, bool):
-            lines.append(f"{prefix}{key}: {'true' if value else 'false'}")
-        elif value is None:
-            lines.append(f"{prefix}{key}: null")
         else:
-            lines.append(f"{prefix}{key}: {value}")
+            lines.append(f"{prefix}{key}: {_scalar_to_yaml(value)}")
     return "\n".join(lines)

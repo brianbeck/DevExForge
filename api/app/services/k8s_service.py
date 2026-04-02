@@ -19,49 +19,39 @@ class K8sService:
         self._clients: dict[str, client.CustomObjectsApi] = {}
 
         if settings.K8S_IN_CLUSTER:
-            config.load_incluster_config()
-            in_cluster_api = client.CustomObjectsApi()
-
-            # Register the in-cluster client for all tiers that map to this cluster
-            # In prod: registers as beck-prod. In stage: registers as beck-stage.
-            local_clusters = set(settings.TIER_CLUSTER_MAP.values())
-            for cluster_name in local_clusters:
-                self._clients[cluster_name] = in_cluster_api
-
-            # If a remote cluster context is configured, load it
-            if settings.K8S_STAGE_CONTEXT:
-                try:
-                    stage_api_client = config.new_client_from_config(
-                        context=settings.K8S_STAGE_CONTEXT
-                    )
-                    self._clients["beck-stage"] = client.CustomObjectsApi(api_client=stage_api_client)
-                except Exception:
-                    logger.warning("Could not load stage cluster config; stage operations will fail")
-
-            if settings.K8S_PROD_CONTEXT:
-                try:
-                    prod_api_client = config.new_client_from_config(
-                        context=settings.K8S_PROD_CONTEXT
-                    )
-                    self._clients["beck-prod"] = client.CustomObjectsApi(api_client=prod_api_client)
-                except Exception:
-                    logger.warning("Could not load prod cluster config; prod operations will fail")
+            self._init_in_cluster()
         else:
-            # Local development: load both contexts from kubeconfig
-            try:
-                prod_api_client = config.new_client_from_config(
-                    context=settings.K8S_PROD_CONTEXT
-                )
-                self._clients["beck-prod"] = client.CustomObjectsApi(api_client=prod_api_client)
-            except Exception:
-                logger.warning("Could not load prod cluster config")
-            try:
-                stage_api_client = config.new_client_from_config(
-                    context=settings.K8S_STAGE_CONTEXT
-                )
-                self._clients["beck-stage"] = client.CustomObjectsApi(api_client=stage_api_client)
-            except Exception:
-                logger.warning("Could not load stage cluster config")
+            self._init_local()
+
+    def _init_in_cluster(self) -> None:
+        """Initialize clients when running inside a Kubernetes cluster."""
+        config.load_incluster_config()
+        in_cluster_api = client.CustomObjectsApi()
+
+        # Register the in-cluster client for all tiers that map to this cluster
+        # In prod: registers as beck-prod. In stage: registers as beck-stage.
+        local_clusters = set(settings.TIER_CLUSTER_MAP.values())
+        for cluster_name in local_clusters:
+            self._clients[cluster_name] = in_cluster_api
+
+        # If a remote cluster context is configured, load it
+        self._load_context(settings.K8S_STAGE_CONTEXT, "beck-stage")
+        self._load_context(settings.K8S_PROD_CONTEXT, "beck-prod")
+
+    def _init_local(self) -> None:
+        """Initialize clients for local development from kubeconfig."""
+        self._load_context(settings.K8S_PROD_CONTEXT, "beck-prod")
+        self._load_context(settings.K8S_STAGE_CONTEXT, "beck-stage")
+
+    def _load_context(self, context_name: str | None, cluster_name: str) -> None:
+        """Load a kubeconfig context and register the client for a cluster."""
+        if not context_name:
+            return
+        try:
+            api_client = config.new_client_from_config(context=context_name)
+            self._clients[cluster_name] = client.CustomObjectsApi(api_client=api_client)
+        except Exception:
+            logger.warning("Could not load %s cluster config; %s operations will fail", cluster_name, cluster_name)
 
     def _get_api(self, cluster: str) -> client.CustomObjectsApi:
         """Get the CustomObjectsApi for the specified cluster."""
