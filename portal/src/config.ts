@@ -15,8 +15,8 @@ export async function loadConfig(): Promise<RuntimeConfig> {
     if (resp.ok) {
       const json = await resp.json();
       if (json.apiBaseUrl) {
-        _config = json;
-        return _config;
+        _config = json as RuntimeConfig;
+        return _config!;
       }
     }
   } catch {
