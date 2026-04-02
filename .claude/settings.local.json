@@ -38,7 +38,8 @@
       "Bash(python -m py_compile app/**/*.py)",
       "Bash(xargs ls:*)",
       "Bash(grep -l \"alias=\" /Users/beck/src/DevExForge/api/app/schemas/*.py)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(chmod:*)"
     ]
   }
 }
