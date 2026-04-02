@@ -74,16 +74,22 @@ async def environment_create(spec, name, namespace, patch, **_kwargs):
     _reconcile_role_bindings(rbac_api, namespace_name, members)
     resources_created.append(f"RoleBindings/{namespace_name}")
 
-    # 7. Create Gatekeeper constraints
+    # 7. Create Gatekeeper constraints (non-fatal if templates not installed)
     policies = spec.get("policies")
-    gk_created = _create_gatekeeper_constraints(custom_api, namespace_name, policies)
-    resources_created.extend(gk_created)
+    try:
+        gk_created = _create_gatekeeper_constraints(custom_api, namespace_name, policies)
+        resources_created.extend(gk_created)
+    except Exception:
+        logger.warning("Gatekeeper constraints could not be created for %s (templates may not be installed)", namespace_name, exc_info=True)
 
-    # 8. Create Argo CD AppProject if enabled
+    # 8. Create Argo CD AppProject if enabled (non-fatal)
     argocd_config = spec.get("argoCD", {})
     if argocd_config.get("enabled", False):
-        _create_appproject(custom_api, namespace_name, team_spec, spec)
-        resources_created.append(f"AppProject/{namespace_name}")
+        try:
+            _create_appproject(custom_api, namespace_name, team_spec, spec)
+            resources_created.append(f"AppProject/{namespace_name}")
+        except Exception:
+            logger.warning("AppProject could not be created for %s", namespace_name, exc_info=True)
 
     # 9. Update status
     patch.status["phase"] = "Active"
@@ -179,7 +185,10 @@ async def environment_update(spec, old, new, diff, name, namespace, patch, **_kw
 
     if "policies" in changed_fields:
         logger.info("Policies changed for %s, reconciling Gatekeeper constraints", namespace_name)
-        _create_gatekeeper_constraints(custom_api, namespace_name, spec.get("policies"))
+        try:
+            _create_gatekeeper_constraints(custom_api, namespace_name, spec.get("policies"))
+        except Exception:
+            logger.warning("Gatekeeper constraints could not be updated for %s", namespace_name, exc_info=True)
 
     if "argoCD" in changed_fields:
         argocd_config = spec.get("argoCD", {})
