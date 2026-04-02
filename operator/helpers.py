@@ -18,7 +18,7 @@ from kubernetes.client import (
     V1ResourceQuotaSpec,
     V1RoleBinding,
     V1RoleRef,
-    V1Subject,
+    RbacV1Subject,
 )
 
 _clients_initialized = False
@@ -244,7 +244,7 @@ def build_role_binding(
             name=cluster_role,
         ),
         subjects=[
-            V1Subject(
+            RbacV1Subject(
                 kind="User",
                 name=subj["email"],
                 api_group="rbac.authorization.k8s.io",

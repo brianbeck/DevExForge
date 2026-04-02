@@ -8,6 +8,10 @@ DEPLOY_DIR="${PROJECT_DIR}/../DevExForge-deploy"
 STAGE_CTX="${STAGE_CTX:-beck-stage-admin@beck-stage}"
 ARGOCD_SERVER="${ARGOCD_SERVER:-argocd-stage.brianbeck.net}"
 
+# Argo CD CLI flags for self-signed certs behind Traefik
+export ARGOCD_OPTS="--grpc-web --insecure"
+ARGOCD_FLAGS="--server $ARGOCD_SERVER"
+
 echo "=== DevExForge Stage Bootstrap ==="
 echo ""
 echo "Stage cluster context: ${STAGE_CTX}"
@@ -28,6 +32,11 @@ if [ ! -d "$DEPLOY_DIR" ]; then
     exit 1
 fi
 
+echo "--- Step 0: Log in to Argo CD ---"
+argocd login "$ARGOCD_SERVER"
+echo "Logged in to Argo CD."
+
+echo ""
 echo "--- Step 1: Verify cluster access ---"
 if ! kubectl --context "$STAGE_CTX" cluster-info &>/dev/null; then
     echo "Error: Cannot connect to stage cluster with context ${STAGE_CTX}"
@@ -49,7 +58,7 @@ echo "Namespace ready."
 echo ""
 echo "--- Step 4: Add deploy repo to Argo CD ---"
 echo "Checking if repo is already registered..."
-if argocd repo get https://github.com/brianbeck/DevExForge-deploy.git --server "$ARGOCD_SERVER" &>/dev/null 2>&1; then
+if argocd repo get https://github.com/brianbeck/DevExForge-deploy.git $ARGOCD_FLAGS &>/dev/null 2>&1; then
     echo "Repo already registered in Argo CD."
 else
     echo ""
@@ -60,18 +69,18 @@ else
     argocd repo add https://github.com/brianbeck/DevExForge-deploy.git \
         --username x-access-token \
         --password "$GITHUB_PAT" \
-        --server "$ARGOCD_SERVER"
+        $ARGOCD_FLAGS
     echo "Repo added to Argo CD."
 fi
 
 echo ""
 echo "--- Step 5: Also add source repo (for Helm chart) ---"
-if argocd repo get https://github.com/brianbeck/DevExForge.git --server "$ARGOCD_SERVER" &>/dev/null 2>&1; then
+if argocd repo get https://github.com/brianbeck/DevExForge.git $ARGOCD_FLAGS &>/dev/null 2>&1; then
     echo "Source repo already registered."
 else
     echo "Adding public source repo..."
     argocd repo add https://github.com/brianbeck/DevExForge.git \
-        --server "$ARGOCD_SERVER" || true
+        $ARGOCD_FLAGS || true
     echo "Source repo added."
 fi
 
@@ -84,7 +93,7 @@ echo ""
 echo "--- Step 7: Wait for sync ---"
 echo "Waiting for Argo CD to sync (up to 120s)..."
 argocd app wait devexforge-stage \
-    --server "$ARGOCD_SERVER" \
+    $ARGOCD_FLAGS \
     --timeout 120 \
     --health || echo "Warning: Sync not complete yet. Check Argo CD dashboard."
 

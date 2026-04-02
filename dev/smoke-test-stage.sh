@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -uo pipefail
 
 STAGE_CTX="${STAGE_CTX:-beck-stage-admin@beck-stage}"
 TEST_TEAM="smoke-test"
@@ -45,7 +45,12 @@ check "Cluster reachable" kubectl --context "$STAGE_CTX" cluster-info
 check "CRDs installed" kubectl --context "$STAGE_CTX" get crd teams.${CRD_GROUP}
 check "Environment CRD installed" kubectl --context "$STAGE_CTX" get crd environments.${CRD_GROUP}
 check "Operator namespace exists" kubectl --context "$STAGE_CTX" get namespace engineering-platform
-check "Operator pod running" kubectl --context "$STAGE_CTX" -n engineering-platform get pods -l app.kubernetes.io/name=devexforge-operator -o jsonpath='{.items[0].status.phase}' | grep -q Running
+POD_PHASE=$(kubectl --context "$STAGE_CTX" -n engineering-platform get pods -l app.kubernetes.io/name=devexforge-operator -o jsonpath='{.items[0].status.phase}' 2>/dev/null || echo "")
+if [ "$POD_PHASE" = "Running" ]; then
+    pass "Operator pod running"
+else
+    fail "Operator pod status is '${POD_PHASE}' (expected Running)"
+fi
 
 echo ""
 echo "--- Create Test Team CRD ---"
