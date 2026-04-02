@@ -84,7 +84,7 @@ async def get_current_user(
             rsa_key,
             algorithms=["RS256"],
             audience=settings.KEYCLOAK_CLIENT_ID,
-            issuer=f"{settings.KEYCLOAK_URL}/realms/{settings.KEYCLOAK_REALM}",
+            issuer=f"{settings.KEYCLOAK_ISSUER_URL or settings.KEYCLOAK_URL}/realms/{settings.KEYCLOAK_REALM}",
         )
 
         email = payload.get("email")

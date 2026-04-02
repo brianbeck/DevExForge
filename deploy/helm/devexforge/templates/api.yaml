@@ -34,6 +34,8 @@ spec:
               value: {{ .Values.api.env.databaseUrl }}
             - name: KEYCLOAK_URL
               value: {{ .Values.api.env.keycloakUrl }}
+            - name: KEYCLOAK_ISSUER_URL
+              value: "https://{{ .Values.keycloak.ingress.host }}"
             - name: KEYCLOAK_REALM
               value: {{ .Values.api.env.keycloakRealm }}
             - name: KEYCLOAK_CLIENT_ID

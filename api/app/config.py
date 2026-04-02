@@ -4,6 +4,7 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     DATABASE_URL: str = "postgresql+asyncpg://devexforge:devexforge@localhost:5432/devexforge"
     KEYCLOAK_URL: str = "http://localhost:8080"
+    KEYCLOAK_ISSUER_URL: str = ""
     KEYCLOAK_REALM: str = "teams"
     KEYCLOAK_CLIENT_ID: str = "devexforge-api"
     K8S_IN_CLUSTER: bool = False
