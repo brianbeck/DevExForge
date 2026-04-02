@@ -43,15 +43,21 @@ spec:
             - name: CORS_ORIGINS
               value: {{ .Values.api.env.corsOrigins | quote }}
             - name: K8S_STAGE_CONTEXT
-              value: {{ .Values.api.env.k8sStageContext }}
+              value: {{ .Values.api.env.k8sStageContext | quote }}
             - name: K8S_PROD_CONTEXT
-              value: {{ .Values.api.env.k8sProdContext }}
+              value: {{ .Values.api.env.k8sProdContext | quote }}
+            {{- if .Values.api.env.tierClusterMap }}
+            - name: TIER_CLUSTER_MAP
+              value: {{ .Values.api.env.tierClusterMap | quote }}
+            {{- end }}
+            {{- if or .Values.api.env.k8sStageContext .Values.api.env.k8sProdContext }}
             - name: KUBECONFIG
-              value: /etc/kubeconfig/stage-kubeconfig
+              value: /etc/kubeconfig/remote-kubeconfig
           volumeMounts:
-            - name: stage-kubeconfig
+            - name: remote-kubeconfig
               mountPath: /etc/kubeconfig
               readOnly: true
+            {{- end }}
           resources:
             {{- toYaml .Values.api.resources | nindent 12 }}
           livenessProbe:
@@ -71,11 +77,13 @@ spec:
             readOnlyRootFilesystem: true
             capabilities:
               drop: [ALL]
+      {{- if or .Values.api.env.k8sStageContext .Values.api.env.k8sProdContext }}
       volumes:
-        - name: stage-kubeconfig
+        - name: remote-kubeconfig
           secret:
-            secretName: devexforge-stage-kubeconfig
+            secretName: devexforge-remote-kubeconfig
             optional: true
+      {{- end }}
 ---
 apiVersion: v1
 kind: Service

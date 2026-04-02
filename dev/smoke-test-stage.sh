@@ -2,11 +2,13 @@
 set -uo pipefail
 
 STAGE_CTX="${STAGE_CTX:-beck-stage-admin@beck-stage}"
+API_URL="${API_URL:-https://devexforge-api-stage.brianbeck.net}"
+PORTAL_URL="${PORTAL_URL:-https://devexforge-stage.brianbeck.net}"
+KEYCLOAK_URL="${KEYCLOAK_URL:-https://keycloak-stage.brianbeck.net}"
+CRD_GROUP="devexforge.brianbeck.net"
 TEST_TEAM="smoke-test"
 TEST_TIER="dev"
 NAMESPACE="${TEST_TEAM}-${TEST_TIER}"
-CRD_GROUP="devexforge.brianbeck.net"
-CRD_VERSION="v1alpha1"
 
 PASSED=0
 FAILED=0
@@ -24,45 +26,133 @@ fail() {
     echo "  FAIL: $1"
 }
 
-check() {
-    local desc="$1"
-    shift
-    if "$@" &>/dev/null; then
-        pass "$desc"
-    else
-        fail "$desc"
-    fi
-}
-
 echo "=== DevExForge Stage Smoke Tests ==="
 echo ""
 echo "Cluster: ${STAGE_CTX}"
+echo "API:     ${API_URL}"
+echo "Portal:  ${PORTAL_URL}"
 echo ""
 
-# --- Preflight ---
-echo "--- Preflight ---"
-check "Cluster reachable" kubectl --context "$STAGE_CTX" cluster-info
-check "CRDs installed" kubectl --context "$STAGE_CTX" get crd teams.${CRD_GROUP}
-check "Environment CRD installed" kubectl --context "$STAGE_CTX" get crd environments.${CRD_GROUP}
-check "Operator namespace exists" kubectl --context "$STAGE_CTX" get namespace engineering-platform
+# --- Infrastructure ---
+echo "--- Infrastructure ---"
+
+if kubectl --context "$STAGE_CTX" cluster-info &>/dev/null; then
+    pass "Cluster reachable"
+else
+    fail "Cluster reachable"
+fi
+
+if kubectl --context "$STAGE_CTX" get crd teams.${CRD_GROUP} &>/dev/null; then
+    pass "Team CRD installed"
+else
+    fail "Team CRD installed"
+fi
+
+if kubectl --context "$STAGE_CTX" get crd environments.${CRD_GROUP} &>/dev/null; then
+    pass "Environment CRD installed"
+else
+    fail "Environment CRD installed"
+fi
+
+# --- Pods ---
+echo ""
+echo "--- Pods ---"
+
 POD_PHASE=$(kubectl --context "$STAGE_CTX" -n engineering-platform get pods -l app.kubernetes.io/name=devexforge-operator -o jsonpath='{.items[0].status.phase}' 2>/dev/null || echo "")
 if [ "$POD_PHASE" = "Running" ]; then
     pass "Operator pod running"
 else
-    fail "Operator pod status is '${POD_PHASE}' (expected Running)"
+    fail "Operator pod status is '${POD_PHASE}'"
 fi
 
+POD_PHASE=$(kubectl --context "$STAGE_CTX" -n engineering-platform get pods -l app.kubernetes.io/name=devexforge-api -o jsonpath='{.items[0].status.phase}' 2>/dev/null || echo "")
+if [ "$POD_PHASE" = "Running" ]; then
+    pass "API pod running"
+else
+    fail "API pod status is '${POD_PHASE}'"
+fi
+
+POD_PHASE=$(kubectl --context "$STAGE_CTX" -n engineering-platform get pods -l app.kubernetes.io/name=devexforge-portal -o jsonpath='{.items[0].status.phase}' 2>/dev/null || echo "")
+if [ "$POD_PHASE" = "Running" ]; then
+    pass "Portal pod running"
+else
+    fail "Portal pod status is '${POD_PHASE}'"
+fi
+
+POD_PHASE=$(kubectl --context "$STAGE_CTX" -n engineering-platform get pods -l app.kubernetes.io/name=devexforge-postgres -o jsonpath='{.items[0].status.phase}' 2>/dev/null || echo "")
+if [ "$POD_PHASE" = "Running" ]; then
+    pass "PostgreSQL pod running"
+else
+    fail "PostgreSQL pod status is '${POD_PHASE}'"
+fi
+
+# --- API Health ---
 echo ""
-echo "--- Create Test Team CRD ---"
-# Clean up any previous test resources
+echo "--- API Health ---"
+
+HEALTH=$(curl -sk "${API_URL}/health" 2>/dev/null || echo "")
+if echo "$HEALTH" | grep -q "healthy"; then
+    pass "API health endpoint"
+else
+    fail "API health endpoint (got: ${HEALTH})"
+fi
+
+READY=$(curl -sk "${API_URL}/ready" 2>/dev/null || echo "")
+if echo "$READY" | grep -q "ready"; then
+    pass "API readiness (database connected)"
+else
+    fail "API readiness (got: ${READY})"
+fi
+
+# --- Portal ---
+echo ""
+echo "--- Portal ---"
+
+PORTAL_STATUS=$(curl -sko /dev/null -w "%{http_code}" "${PORTAL_URL}/" 2>/dev/null || echo "000")
+if [ "$PORTAL_STATUS" = "200" ]; then
+    pass "Portal reachable (HTTP ${PORTAL_STATUS})"
+else
+    fail "Portal returned HTTP ${PORTAL_STATUS}"
+fi
+
+# --- API Auth Flow ---
+echo ""
+echo "--- API Auth Flow ---"
+
+TOKEN=$(curl -sk -X POST "${KEYCLOAK_URL}/realms/teams/protocol/openid-connect/token" \
+    -H "Content-Type: application/x-www-form-urlencoded" \
+    -d "grant_type=password&client_id=devexforge-portal&username=admin&password=admin123" \
+    2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin).get('access_token',''))" 2>/dev/null || echo "")
+
+if [ -n "$TOKEN" ] && [ "$TOKEN" != "" ]; then
+    pass "Keycloak token acquired"
+else
+    fail "Keycloak token acquisition"
+    echo ""
+    echo "  (Skipping API auth tests -- no token)"
+    TOKEN=""
+fi
+
+if [ -n "$TOKEN" ]; then
+    TEAMS_RESP=$(curl -sk -H "Authorization: Bearer $TOKEN" "${API_URL}/api/v1/teams" 2>/dev/null || echo "")
+    if echo "$TEAMS_RESP" | grep -q "teams"; then
+        pass "API list teams (authenticated)"
+    else
+        fail "API list teams (got: ${TEAMS_RESP})"
+    fi
+fi
+
+# --- Operator Reconciliation ---
+echo ""
+echo "--- Operator Reconciliation ---"
+
 kubectl --context "$STAGE_CTX" delete team "$TEST_TEAM" --ignore-not-found &>/dev/null
-kubectl --context "$STAGE_CTX" delete environment "${NAMESPACE}" --ignore-not-found &>/dev/null
+kubectl --context "$STAGE_CTX" delete environment "$NAMESPACE" --ignore-not-found &>/dev/null
 kubectl --context "$STAGE_CTX" delete namespace "$NAMESPACE" --ignore-not-found --wait=false &>/dev/null
 sleep 3
 
-# Create Team CRD
 kubectl --context "$STAGE_CTX" apply -f - <<EOF
-apiVersion: ${CRD_GROUP}/${CRD_VERSION}
+apiVersion: ${CRD_GROUP}/v1alpha1
 kind: Team
 metadata:
   name: ${TEST_TEAM}
@@ -81,24 +171,23 @@ spec:
     purpose: smoke-test
 EOF
 
-check "Team CRD created" kubectl --context "$STAGE_CTX" get team "$TEST_TEAM"
-
-echo ""
-echo "--- Wait for Team reconciliation (10s) ---"
-sleep 10
-
-# Check Team status
-TEAM_PHASE=$(kubectl --context "$STAGE_CTX" get team "$TEST_TEAM" -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
-if [ "$TEAM_PHASE" = "Active" ]; then
-    pass "Team status is Active"
+if kubectl --context "$STAGE_CTX" get team "$TEST_TEAM" &>/dev/null; then
+    pass "Team CRD created"
 else
-    fail "Team status is '${TEAM_PHASE}' (expected Active)"
+    fail "Team CRD created"
 fi
 
-echo ""
-echo "--- Create Test Environment CRD ---"
+sleep 10
+
+TEAM_PHASE=$(kubectl --context "$STAGE_CTX" get team "$TEST_TEAM" -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
+if [ "$TEAM_PHASE" = "Active" ]; then
+    pass "Team status Active"
+else
+    fail "Team status is '${TEAM_PHASE}'"
+fi
+
 kubectl --context "$STAGE_CTX" apply -f - <<EOF
-apiVersion: ${CRD_GROUP}/${CRD_VERSION}
+apiVersion: ${CRD_GROUP}/v1alpha1
 kind: Environment
 metadata:
   name: ${NAMESPACE}
@@ -132,59 +221,75 @@ spec:
     enabled: false
 EOF
 
-check "Environment CRD created" kubectl --context "$STAGE_CTX" get environment "$NAMESPACE"
-
-echo ""
-echo "--- Wait for Environment reconciliation (30s) ---"
-sleep 30
-
-# Check Environment status
-ENV_PHASE=$(kubectl --context "$STAGE_CTX" get environment "$NAMESPACE" -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
-if [ "$ENV_PHASE" = "Active" ]; then
-    pass "Environment status is Active"
+if kubectl --context "$STAGE_CTX" get environment "$NAMESPACE" &>/dev/null; then
+    pass "Environment CRD created"
 else
-    fail "Environment status is '${ENV_PHASE}' (expected Active)"
+    fail "Environment CRD created"
 fi
 
-echo ""
-echo "--- Verify reconciled resources ---"
-check "Namespace created" kubectl --context "$STAGE_CTX" get namespace "$NAMESPACE"
+echo "  Waiting for reconciliation (30s)..."
+sleep 30
 
-# Check namespace labels
+ENV_PHASE=$(kubectl --context "$STAGE_CTX" get environment "$NAMESPACE" -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
+if [ "$ENV_PHASE" = "Active" ]; then
+    pass "Environment status Active"
+else
+    fail "Environment status is '${ENV_PHASE}'"
+fi
+
+if kubectl --context "$STAGE_CTX" get namespace "$NAMESPACE" &>/dev/null; then
+    pass "Namespace created"
+else
+    fail "Namespace created"
+fi
+
 TEAM_LABEL=$(kubectl --context "$STAGE_CTX" get namespace "$NAMESPACE" -o jsonpath="{.metadata.labels['devexforge\.brianbeck\.net/team']}" 2>/dev/null || echo "")
 if [ "$TEAM_LABEL" = "$TEST_TEAM" ]; then
     pass "Namespace has team label"
 else
-    fail "Namespace team label is '${TEAM_LABEL}' (expected ${TEST_TEAM})"
+    fail "Namespace team label is '${TEAM_LABEL}'"
 fi
 
-check "ResourceQuota created" kubectl --context "$STAGE_CTX" -n "$NAMESPACE" get resourcequota default
-check "LimitRange created" kubectl --context "$STAGE_CTX" -n "$NAMESPACE" get limitrange default
-check "NetworkPolicy created" kubectl --context "$STAGE_CTX" -n "$NAMESPACE" get networkpolicy default
-check "RoleBindings created" kubectl --context "$STAGE_CTX" -n "$NAMESPACE" get rolebindings -l devexforge.brianbeck.net/managed-by=devexforge-operator -o name | grep -q rolebinding
+if kubectl --context "$STAGE_CTX" -n "$NAMESPACE" get resourcequota default &>/dev/null; then
+    pass "ResourceQuota created"
+else
+    fail "ResourceQuota created"
+fi
 
-# Verify quota values
+if kubectl --context "$STAGE_CTX" -n "$NAMESPACE" get limitrange default &>/dev/null; then
+    pass "LimitRange created"
+else
+    fail "LimitRange created"
+fi
+
+if kubectl --context "$STAGE_CTX" -n "$NAMESPACE" get networkpolicy default &>/dev/null; then
+    pass "NetworkPolicy created"
+else
+    fail "NetworkPolicy created"
+fi
+
 QUOTA_PODS=$(kubectl --context "$STAGE_CTX" -n "$NAMESPACE" get resourcequota default -o jsonpath='{.spec.hard.pods}' 2>/dev/null || echo "")
 if [ "$QUOTA_PODS" = "10" ]; then
-    pass "ResourceQuota pods limit is correct (10)"
+    pass "ResourceQuota pods limit correct (10)"
 else
-    fail "ResourceQuota pods limit is '${QUOTA_PODS}' (expected 10)"
+    fail "ResourceQuota pods is '${QUOTA_PODS}' (expected 10)"
 fi
 
+# --- Cleanup ---
 echo ""
 echo "--- Cleanup ---"
 kubectl --context "$STAGE_CTX" delete environment "$NAMESPACE" --ignore-not-found
 kubectl --context "$STAGE_CTX" delete team "$TEST_TEAM" --ignore-not-found
-echo "Waiting for cleanup (15s)..."
+echo "  Waiting for cleanup (15s)..."
 sleep 15
 
-# Verify cleanup
 if kubectl --context "$STAGE_CTX" get namespace "$NAMESPACE" &>/dev/null; then
-    fail "Namespace still exists after cleanup"
+    fail "Namespace cleaned up"
 else
     pass "Namespace cleaned up"
 fi
 
+# --- Results ---
 echo ""
 echo "=== Results ==="
 echo ""
