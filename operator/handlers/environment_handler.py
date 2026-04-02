@@ -525,7 +525,7 @@ def _create_gatekeeper_constraints(
                 },
                 "parameters": {
                     "exemptImages": exempt_images,
-                    "exemptNamespaces": [],
+                    "exemptNamespaces": exemptions.get("exemptNamespaces", []),
                 },
             },
         }

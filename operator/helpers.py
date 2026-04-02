@@ -76,6 +76,17 @@ DEFAULT_LIMIT_RANGE_CONTAINER = {
 }
 
 
+CRD_TO_QUOTA_KEY = {
+    "cpuRequest": "requests.cpu",
+    "cpuLimit": "limits.cpu",
+    "memoryRequest": "requests.memory",
+    "memoryLimit": "limits.memory",
+    "pods": "pods",
+    "services": "services",
+    "persistentVolumeClaims": "persistentvolumeclaims",
+}
+
+
 def build_resource_quota(
     namespace: str,
     spec: dict[str, Any] | None,
@@ -83,7 +94,9 @@ def build_resource_quota(
     """Build a V1ResourceQuota from a spec dict, applying defaults."""
     hard = dict(DEFAULT_QUOTA)
     if spec:
-        hard.update(spec)
+        for crd_key, value in spec.items():
+            k8s_key = CRD_TO_QUOTA_KEY.get(crd_key, crd_key)
+            hard[k8s_key] = str(value)
 
     return V1ResourceQuota(
         metadata=V1ObjectMeta(
@@ -104,8 +117,20 @@ def build_limit_range(
     """Build a V1LimitRange from a spec dict, applying defaults."""
     container_limits = dict(DEFAULT_LIMIT_RANGE_CONTAINER)
     if spec:
+        # Map CRD flat fields to nested K8s LimitRange structure
+        if "defaultCpuLimit" in spec or "defaultMemoryLimit" in spec:
+            container_limits["default"] = {
+                "cpu": spec.get("defaultCpuLimit", container_limits["default"]["cpu"]),
+                "memory": spec.get("defaultMemoryLimit", container_limits["default"]["memory"]),
+            }
+        if "defaultCpuRequest" in spec or "defaultMemoryRequest" in spec:
+            container_limits["defaultRequest"] = {
+                "cpu": spec.get("defaultCpuRequest", container_limits["defaultRequest"]["cpu"]),
+                "memory": spec.get("defaultMemoryRequest", container_limits["defaultRequest"]["memory"]),
+            }
+        # Also accept already-nested format
         for key in ("default", "defaultRequest", "max", "min"):
-            if key in spec:
+            if key in spec and isinstance(spec[key], dict):
                 container_limits[key] = spec[key]
 
     return V1LimitRange(
@@ -323,6 +348,28 @@ def build_appproject(
             }
         )
 
+    # Map CRD allowedClusterResources to AppProject clusterResourceWhitelist
+    allowed_cluster_resources = argocd_config.get("allowedClusterResources", [])
+    cluster_resource_whitelist = [
+        {"group": r.get("group", ""), "kind": r.get("kind", "")}
+        for r in allowed_cluster_resources
+    ]
+
+    project_spec = {
+        "description": f"AppProject for environment {namespace_name} (team: {team_name})",
+        "sourceRepos": source_repos,
+        "destinations": [
+            {
+                "server": "https://kubernetes.default.svc",
+                "namespace": namespace_name,
+            },
+        ],
+        "roles": roles,
+    }
+
+    if cluster_resource_whitelist:
+        project_spec["clusterResourceWhitelist"] = cluster_resource_whitelist
+
     return {
         "apiVersion": "argoproj.io/v1alpha1",
         "kind": "AppProject",
@@ -334,15 +381,5 @@ def build_appproject(
                 "devexforge.brianbeck.net/environment": namespace_name,
             },
         },
-        "spec": {
-            "description": f"AppProject for environment {namespace_name} (team: {team_name})",
-            "sourceRepos": source_repos,
-            "destinations": [
-                {
-                    "server": "https://kubernetes.default.svc",
-                    "namespace": namespace_name,
-                },
-            ],
-            "roles": roles,
-        },
+        "spec": project_spec,
     }
