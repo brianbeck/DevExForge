@@ -1,4 +1,4 @@
-import { API_BASE_URL, keycloakConfig } from "@/config";
+import { getConfig, getKeycloak } from "@/config";
 
 class ApiError extends Error {
   status: number;
@@ -21,11 +21,11 @@ async function request<T>(
     ...(options.headers as Record<string, string>),
   };
 
-  if (keycloakConfig.token) {
-    headers["Authorization"] = `Bearer ${keycloakConfig.token}`;
+  if (getKeycloak().token) {
+    headers["Authorization"] = `Bearer ${getKeycloak().token}`;
   }
 
-  const response = await fetch(`${API_BASE_URL}${path}`, {
+  const response = await fetch(`${getConfig().apiBaseUrl}${path}`, {
     ...options,
     headers,
   });

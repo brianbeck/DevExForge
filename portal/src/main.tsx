@@ -2,7 +2,7 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 import { ReactKeycloakProvider } from "@react-keycloak/web";
-import { keycloakConfig } from "@/config";
+import { getKeycloak } from "@/config";
 import App from "@/App";
 
 const initOptions = {
@@ -15,7 +15,7 @@ const initOptions = {
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <ReactKeycloakProvider
-      authClient={keycloakConfig}
+      authClient={getKeycloak()}
       initOptions={initOptions}
       LoadingComponent={
         <div className="loading-screen">

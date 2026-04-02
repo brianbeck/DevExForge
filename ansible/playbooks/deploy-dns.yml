@@ -1,0 +1,71 @@
+---
+# Register DevExForge and Keycloak hostnames with Pi-hole DNS.
+#
+# Prerequisites:
+#   - PlatformForge deployed with Traefik ingress
+#   - PlatformForge vault secrets configured (.vault_pass file)
+#
+# Usage:
+#   cd ansible
+#   ansible-playbook playbooks/deploy-dns.yml -e platformforge_dir=~/src/PlatformForge
+
+- name: Register DevExForge DNS with Pi-hole
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - ../group_vars/all.yml
+
+  pre_tasks:
+    - name: Resolve default PlatformForge path
+      ansible.builtin.set_fact:
+        platformforge_default: "{{ (platformforge_dir | expanduser) | realpath }}"
+
+    - name: Prompt for PlatformForge directory
+      ansible.builtin.pause:
+        prompt: "Enter path to PlatformForge directory [{{ platformforge_default }}]"
+      register: pf_prompt
+
+    - name: Set PlatformForge directory
+      ansible.builtin.set_fact:
+        platformforge_dir: "{{ ((pf_prompt.user_input | trim | expanduser) | realpath) if (pf_prompt.user_input | trim | length > 0) else platformforge_default }}"
+
+    - name: Verify PlatformForge directory exists
+      ansible.builtin.stat:
+        path: "{{ platformforge_dir }}/environments.yml"
+      register: pf_check
+
+    - name: Fail if PlatformForge not found
+      when: not pf_check.stat.exists
+      ansible.builtin.fail:
+        msg: |
+          PlatformForge not found at {{ platformforge_dir }}
+
+          Expected to find environments.yml at {{ platformforge_dir }}/environments.yml
+
+          Make sure PlatformForge is cloned and bootstrapped:
+            git clone https://github.com/brianbeck/PlatformForge.git {{ platformforge_dir }}
+            cd {{ platformforge_dir }}/ansible
+            ansible-playbook playbooks/bootstrap.yml
+
+    - name: Verify vault password file exists
+      ansible.builtin.stat:
+        path: "{{ platformforge_dir }}/ansible/.vault_pass"
+      register: vault_check
+
+    - name: Fail if vault password not found
+      when: not vault_check.stat.exists
+      ansible.builtin.fail:
+        msg: |
+          PlatformForge vault password file not found at {{ platformforge_dir }}/ansible/.vault_pass
+
+          This file is needed to decrypt Pi-hole credentials.
+          Run PlatformForge bootstrap first:
+            cd {{ platformforge_dir }}/ansible
+            ansible-playbook playbooks/bootstrap.yml
+
+  roles:
+    - role: pihole_dns
+      vars:
+        platformforge_env_file: "{{ platformforge_dir }}/environments.yml"
+        platformforge_vault_pass: "{{ platformforge_dir }}/ansible/.vault_pass"
+        platformforge_vault_secrets: "{{ platformforge_dir }}/ansible/vault/secrets.yml"

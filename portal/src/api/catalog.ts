@@ -14,19 +14,19 @@ export interface CatalogTemplate {
 }
 
 export async function listTemplates(): Promise<CatalogTemplate[]> {
-  return get<CatalogTemplate[]>("/v1/catalog/templates");
+  return get<CatalogTemplate[]>("/api/v1/catalog/templates");
 }
 
 export async function getTemplate(id: string): Promise<CatalogTemplate> {
-  return get<CatalogTemplate>(`/v1/catalog/templates/${id}`);
+  return get<CatalogTemplate>(`/api/v1/catalog/templates/${id}`);
 }
 
 export async function createTemplate(data: Partial<CatalogTemplate>): Promise<CatalogTemplate> {
-  return post<CatalogTemplate>("/v1/catalog/templates", data);
+  return post<CatalogTemplate>("/api/v1/catalog/templates", data);
 }
 
 export async function deleteTemplate(id: string): Promise<void> {
-  return del(`/v1/catalog/templates/${id}`);
+  return del(`/api/v1/catalog/templates/${id}`);
 }
 
 export async function deployFromTemplate(
@@ -34,5 +34,5 @@ export async function deployFromTemplate(
   tier: string,
   data: { templateId: string; appName: string; values?: Record<string, unknown> }
 ): Promise<{ message: string; applicationName: string; namespace: string; templateName: string }> {
-  return post(`/v1/teams/${slug}/environments/${tier}/deploy`, data);
+  return post(`/api/v1/teams/${slug}/environments/${tier}/deploy`, data);
 }

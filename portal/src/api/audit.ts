@@ -33,7 +33,7 @@ export async function getAuditLog(params?: {
   if (params?.limit) searchParams.set("limit", String(params.limit));
   if (params?.offset) searchParams.set("offset", String(params.offset));
   const qs = searchParams.toString();
-  return get<AuditLogList>(`/v1/audit${qs ? `?${qs}` : ""}`);
+  return get<AuditLogList>(`/api/v1/audit${qs ? `?${qs}` : ""}`);
 }
 
 export async function getTeamAuditLog(slug: string, params?: {
@@ -44,5 +44,5 @@ export async function getTeamAuditLog(slug: string, params?: {
   if (params?.limit) searchParams.set("limit", String(params.limit));
   if (params?.offset) searchParams.set("offset", String(params.offset));
   const qs = searchParams.toString();
-  return get<AuditLogList>(`/v1/teams/${slug}/audit${qs ? `?${qs}` : ""}`);
+  return get<AuditLogList>(`/api/v1/teams/${slug}/audit${qs ? `?${qs}` : ""}`);
 }

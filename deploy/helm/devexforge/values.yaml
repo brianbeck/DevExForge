@@ -59,6 +59,21 @@ operator:
     ingressNamespace: traefik
     argocdNamespace: argocd
 
+keycloak:
+  enabled: true
+  namespace: keycloak
+  image:
+    repository: quay.io/keycloak/keycloak
+    tag: "25.0"
+  adminUser: admin
+  adminPassword: admin
+  db:
+    username: keycloak
+    password: keycloak
+    storage: 2Gi
+  ingress:
+    host: keycloak.brianbeck.net
+
 postgres:
   enabled: true
   image:

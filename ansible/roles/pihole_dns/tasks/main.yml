@@ -1,0 +1,158 @@
+---
+# Register DevExForge and Keycloak hostnames with Pi-hole DNS servers.
+# Reuses PlatformForge's vault secrets for Pi-hole credentials.
+
+- name: Load PlatformForge environment config
+  ansible.builtin.include_vars:
+    file: "{{ platformforge_env_file }}"
+    name: pf_env
+
+- name: Set PlatformForge facts
+  ansible.builtin.set_fact:
+    stage_context: "{{ pf_env.stage_context }}"
+    prod_context: "{{ pf_env.prod_context }}"
+    pihole_enabled: "{{ pf_env.pihole_enabled | default(false) }}"
+    ingress_enabled: "{{ pf_env.ingress_enabled | default(false) }}"
+
+- name: Skip if Pi-hole not enabled
+  when: not (pihole_enabled | default(false) | bool)
+  ansible.builtin.meta: end_role
+
+- name: Skip if ingress not enabled
+  when: not (ingress_enabled | default(false) | bool)
+  ansible.builtin.meta: end_role
+
+# --- Get Traefik LB IPs ---
+
+- name: Get Traefik LB IP (stage)
+  ansible.builtin.shell:
+    cmd: >-
+      kubectl --context {{ stage_context }} -n traefik
+      get svc -l app.kubernetes.io/name=traefik
+      -o jsonpath='{.items[0].status.loadBalancer.ingress[0].ip}'
+  register: traefik_ip_stage_raw
+  changed_when: false
+
+- name: Get Traefik LB IP (prod)
+  ansible.builtin.shell:
+    cmd: >-
+      kubectl --context {{ prod_context }} -n traefik
+      get svc -l app.kubernetes.io/name=traefik
+      -o jsonpath='{.items[0].status.loadBalancer.ingress[0].ip}'
+  register: traefik_ip_prod_raw
+  changed_when: false
+
+- name: Set Traefik IP facts
+  ansible.builtin.set_fact:
+    traefik_ip_stage: "{{ traefik_ip_stage_raw.stdout | trim }}"
+    traefik_ip_prod: "{{ traefik_ip_prod_raw.stdout | trim }}"
+
+# --- Load vault secrets (reuse PlatformForge vault) ---
+
+- name: Decrypt PlatformForge vault secrets
+  ansible.builtin.command:
+    cmd: >-
+      ansible-vault decrypt
+      --vault-password-file {{ platformforge_vault_pass }}
+      --output -
+      {{ platformforge_vault_secrets }}
+  register: vault_decrypt
+  changed_when: false
+  no_log: true
+
+- name: Parse vault secrets
+  ansible.builtin.set_fact:
+    pihole_primary_ip: "{{ (vault_decrypt.stdout | from_yaml).pihole_primary_ip }}"
+    pihole_primary_password: "{{ (vault_decrypt.stdout | from_yaml).pihole_primary_password }}"
+    pihole_secondary_ip: "{{ (vault_decrypt.stdout | from_yaml).pihole_secondary_ip | default('') }}"
+    pihole_secondary_password: "{{ (vault_decrypt.stdout | from_yaml).pihole_secondary_password | default('') }}"
+  no_log: true
+
+# --- Build DNS records ---
+
+- name: Build DevExForge DNS records
+  ansible.builtin.set_fact:
+    dns_records:
+      - { hostname: "{{ devexforge_api_hostname_stage }}", ip: "{{ traefik_ip_stage }}" }
+      - { hostname: "{{ devexforge_portal_hostname_stage }}", ip: "{{ traefik_ip_stage }}" }
+      - { hostname: "{{ keycloak_hostname_stage }}", ip: "{{ traefik_ip_stage }}" }
+      - { hostname: "{{ devexforge_api_hostname_prod }}", ip: "{{ traefik_ip_prod }}" }
+      - { hostname: "{{ devexforge_portal_hostname_prod }}", ip: "{{ traefik_ip_prod }}" }
+      - { hostname: "{{ keycloak_hostname_prod }}", ip: "{{ traefik_ip_prod }}" }
+
+# --- Register with primary Pi-hole ---
+
+- name: Authenticate with primary Pi-hole
+  ansible.builtin.uri:
+    url: "http://{{ pihole_primary_ip }}/api/auth"
+    method: POST
+    body_format: json
+    body:
+      password: "{{ pihole_primary_password }}"
+    status_code: [200]
+  register: pihole_primary_auth
+  no_log: true
+
+- name: Set primary Pi-hole session ID
+  ansible.builtin.set_fact:
+    pihole_primary_sid: "{{ pihole_primary_auth.json.session.sid }}"
+  no_log: true
+
+- name: Register DNS records with primary Pi-hole
+  ansible.builtin.uri:
+    url: "http://{{ pihole_primary_ip }}/api/config/dns/hosts/{{ item.ip }} {{ item.hostname }}"
+    method: PUT
+    headers:
+      sid: "{{ pihole_primary_sid }}"
+    status_code: [200, 201]
+  loop: "{{ dns_records }}"
+  loop_control:
+    label: "{{ item.hostname }} -> {{ item.ip }}"
+  failed_when: false
+
+# --- Register with secondary Pi-hole ---
+
+- name: Authenticate with secondary Pi-hole
+  when: pihole_secondary_ip | length > 0 and pihole_secondary_password | length > 0
+  ansible.builtin.uri:
+    url: "http://{{ pihole_secondary_ip }}/api/auth"
+    method: POST
+    body_format: json
+    body:
+      password: "{{ pihole_secondary_password }}"
+    status_code: [200]
+  register: pihole_secondary_auth
+  no_log: true
+
+- name: Set secondary Pi-hole session ID
+  when: pihole_secondary_ip | length > 0 and pihole_secondary_password | length > 0
+  ansible.builtin.set_fact:
+    pihole_secondary_sid: "{{ pihole_secondary_auth.json.session.sid }}"
+  no_log: true
+
+- name: Register DNS records with secondary Pi-hole
+  when: pihole_secondary_ip | length > 0 and pihole_secondary_password | length > 0
+  ansible.builtin.uri:
+    url: "http://{{ pihole_secondary_ip }}/api/config/dns/hosts/{{ item.ip }} {{ item.hostname }}"
+    method: PUT
+    headers:
+      sid: "{{ pihole_secondary_sid }}"
+    status_code: [200, 201]
+  loop: "{{ dns_records }}"
+  loop_control:
+    label: "{{ item.hostname }} -> {{ item.ip }}"
+  failed_when: false
+
+- name: Display DNS registration summary
+  ansible.builtin.debug:
+    msg: |
+      DevExForge DNS Registration Summary
+      ====================================
+      {% for record in dns_records %}
+      {{ record.hostname }} -> {{ record.ip }}
+      {% endfor %}
+
+      Primary Pi-hole ({{ pihole_primary_ip }}): Done
+      {% if pihole_secondary_ip | length > 0 %}
+      Secondary Pi-hole ({{ pihole_secondary_ip }}): Done
+      {% endif %}

@@ -40,24 +40,24 @@ export interface ComplianceSummary {
 
 export async function getViolations(slug: string, tier: string) {
   return get<{ violations: Violation[]; total: number }>(
-    `/v1/teams/${slug}/environments/${tier}/violations`
+    `/api/v1/teams/${slug}/environments/${tier}/violations`
   );
 }
 
 export async function getVulnerabilities(slug: string, tier: string) {
   return get<{ vulnerabilities: VulnerabilityReport[]; total: number }>(
-    `/v1/teams/${slug}/environments/${tier}/vulnerabilities`
+    `/api/v1/teams/${slug}/environments/${tier}/vulnerabilities`
   );
 }
 
 export async function getSecurityEvents(slug: string, tier: string) {
   return get<{ events: SecurityEvent[]; total: number }>(
-    `/v1/teams/${slug}/environments/${tier}/security-events`
+    `/api/v1/teams/${slug}/environments/${tier}/security-events`
   );
 }
 
 export async function getComplianceSummary(slug: string, tier: string) {
   return get<ComplianceSummary>(
-    `/v1/teams/${slug}/environments/${tier}/compliance-summary`
+    `/api/v1/teams/${slug}/environments/${tier}/compliance-summary`
   );
 }

@@ -1,0 +1,295 @@
+{{- if ne (toString .Values.keycloak.enabled) "false" }}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Values.keycloak.namespace }}
+  labels:
+    {{- include "devexforge.labels" . | nindent 4 }}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: keycloak-db-credentials
+  namespace: {{ .Values.keycloak.namespace }}
+  labels:
+    {{- include "devexforge.labels" . | nindent 4 }}
+type: Opaque
+stringData:
+  POSTGRES_DB: keycloak
+  POSTGRES_USER: {{ .Values.keycloak.db.username }}
+  POSTGRES_PASSWORD: {{ .Values.keycloak.db.password }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: keycloak-db-data
+  namespace: {{ .Values.keycloak.namespace }}
+  labels:
+    {{- include "devexforge.labels" . | nindent 4 }}
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: {{ .Values.keycloak.db.storage }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: keycloak-db
+  namespace: {{ .Values.keycloak.namespace }}
+  labels:
+    app.kubernetes.io/name: keycloak-db
+    {{- include "devexforge.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: keycloak-db
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: keycloak-db
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          ports:
+            - containerPort: 5432
+          envFrom:
+            - secretRef:
+                name: keycloak-db-credentials
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+              subPath: pgdata
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          livenessProbe:
+            exec:
+              command: [pg_isready, -U, {{ .Values.keycloak.db.username }}]
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          readinessProbe:
+            exec:
+              command: [pg_isready, -U, {{ .Values.keycloak.db.username }}]
+            initialDelaySeconds: 5
+            periodSeconds: 5
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: keycloak-db-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: keycloak-db
+  namespace: {{ .Values.keycloak.namespace }}
+  labels:
+    {{- include "devexforge.labels" . | nindent 4 }}
+spec:
+  selector:
+    app.kubernetes.io/name: keycloak-db
+  ports:
+    - port: 5432
+      targetPort: 5432
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: keycloak-realm
+  namespace: {{ .Values.keycloak.namespace }}
+  labels:
+    {{- include "devexforge.labels" . | nindent 4 }}
+data:
+  teams-realm.json: |
+    {
+      "realm": "teams",
+      "enabled": true,
+      "sslRequired": "none",
+      "registrationAllowed": false,
+      "resetPasswordAllowed": true,
+      "bruteForceProtected": true,
+      "clients": [
+        {
+          "clientId": "devexforge-portal",
+          "name": "DevExForge Portal",
+          "enabled": true,
+          "publicClient": true,
+          "protocol": "openid-connect",
+          "standardFlowEnabled": true,
+          "directAccessGrantsEnabled": true,
+          "redirectUris": ["https://{{ .Values.portal.ingress.host }}/*"],
+          "webOrigins": ["https://{{ .Values.portal.ingress.host }}"],
+          "attributes": {
+            "post.logout.redirect.uris": "https://{{ .Values.portal.ingress.host }}/*",
+            "pkce.code.challenge.method": "S256"
+          }
+        },
+        {
+          "clientId": "devexforge-api",
+          "name": "DevExForge API",
+          "enabled": true,
+          "bearerOnly": true,
+          "protocol": "openid-connect"
+        }
+      ],
+      "users": [
+        {
+          "username": "admin",
+          "enabled": true,
+          "firstName": "Admin",
+          "lastName": "User",
+          "email": "admin@company.com",
+          "emailVerified": true,
+          "credentials": [{"type": "password", "value": "admin123", "temporary": false}],
+          "realmRoles": ["admin", "team-leader"]
+        },
+        {
+          "username": "teamlead1",
+          "enabled": true,
+          "firstName": "Team",
+          "lastName": "Lead",
+          "email": "teamlead1@company.com",
+          "emailVerified": true,
+          "credentials": [{"type": "password", "value": "password123", "temporary": false}],
+          "realmRoles": ["team-leader"]
+        },
+        {
+          "username": "developer1",
+          "enabled": true,
+          "firstName": "Dev",
+          "lastName": "User",
+          "email": "developer1@company.com",
+          "emailVerified": true,
+          "credentials": [{"type": "password", "value": "password123", "temporary": false}],
+          "realmRoles": []
+        }
+      ],
+      "roles": {
+        "realm": [
+          {"name": "team-leader", "description": "Can create and manage teams"},
+          {"name": "admin", "description": "Full administrative access"}
+        ]
+      }
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: keycloak
+  namespace: {{ .Values.keycloak.namespace }}
+  labels:
+    app.kubernetes.io/name: keycloak
+    {{- include "devexforge.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: keycloak
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: keycloak
+    spec:
+      containers:
+        - name: keycloak
+          image: "{{ .Values.keycloak.image.repository }}:{{ .Values.keycloak.image.tag }}"
+          args: ["start-dev", "--import-realm"]
+          ports:
+            - containerPort: 8080
+          env:
+            - name: KC_DB
+              value: postgres
+            - name: KC_DB_URL
+              value: jdbc:postgresql://keycloak-db:5432/keycloak
+            - name: KC_DB_USERNAME
+              value: {{ .Values.keycloak.db.username }}
+            - name: KC_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: keycloak-db-credentials
+                  key: POSTGRES_PASSWORD
+            - name: KEYCLOAK_ADMIN
+              value: {{ .Values.keycloak.adminUser }}
+            - name: KEYCLOAK_ADMIN_PASSWORD
+              value: {{ .Values.keycloak.adminPassword }}
+            - name: KC_HTTP_ENABLED
+              value: "true"
+            - name: KC_HOSTNAME_STRICT
+              value: "false"
+            - name: KC_PROXY_HEADERS
+              value: "xforwarded"
+          volumeMounts:
+            - name: realm-config
+              mountPath: /opt/keycloak/data/import
+              readOnly: true
+          resources:
+            requests:
+              cpu: 200m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+          readinessProbe:
+            httpGet:
+              path: /realms/teams
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /realms/teams
+              port: 8080
+            initialDelaySeconds: 60
+            periodSeconds: 30
+      volumes:
+        - name: realm-config
+          configMap:
+            name: keycloak-realm
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: keycloak-service
+  namespace: {{ .Values.keycloak.namespace }}
+  labels:
+    app.kubernetes.io/name: keycloak
+    {{- include "devexforge.labels" . | nindent 4 }}
+spec:
+  selector:
+    app.kubernetes.io/name: keycloak
+  ports:
+    - port: 8080
+      targetPort: 8080
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: keycloak
+  namespace: {{ .Values.keycloak.namespace }}
+  labels:
+    {{- include "devexforge.labels" . | nindent 4 }}
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
+spec:
+  rules:
+    - host: {{ .Values.keycloak.ingress.host }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: keycloak-service
+                port:
+                  number: 8080
+{{- end }}

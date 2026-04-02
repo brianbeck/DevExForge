@@ -6,21 +6,21 @@ import type {
 } from "@/types";
 
 export function listEnvironments(teamSlug: string): Promise<Environment[]> {
-  return get<Environment[]>(`/v1/teams/${teamSlug}/environments`);
+  return get<Environment[]>(`/api/v1/teams/${teamSlug}/environments`);
 }
 
 export function getEnvironment(
   teamSlug: string,
   tier: string
 ): Promise<Environment> {
-  return get<Environment>(`/v1/teams/${teamSlug}/environments/${tier}`);
+  return get<Environment>(`/api/v1/teams/${teamSlug}/environments/${tier}`);
 }
 
 export function createEnvironment(
   teamSlug: string,
   data: EnvironmentCreate
 ): Promise<Environment> {
-  return post<Environment>(`/v1/teams/${teamSlug}/environments`, data);
+  return post<Environment>(`/api/v1/teams/${teamSlug}/environments`, data);
 }
 
 export function updateEnvironment(
@@ -29,7 +29,7 @@ export function updateEnvironment(
   data: EnvironmentUpdate
 ): Promise<Environment> {
   return patch<Environment>(
-    `/v1/teams/${teamSlug}/environments/${tier}`,
+    `/api/v1/teams/${teamSlug}/environments/${tier}`,
     data
   );
 }
@@ -38,5 +38,5 @@ export function deleteEnvironment(
   teamSlug: string,
   tier: string
 ): Promise<void> {
-  return del(`/v1/teams/${teamSlug}/environments/${tier}`);
+  return del(`/api/v1/teams/${teamSlug}/environments/${tier}`);
 }

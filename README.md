@@ -15,8 +15,99 @@ Portal/CLI -> API (PostgreSQL) -> Syncs CRDs to cluster -> Operator watches CRDs
 - **Portal** (`portal/`): Vite + React + TypeScript with Keycloak auth
 - **Operator** (`operator/`): Kopf-based K8s operator that reconciles Team/Environment CRDs into namespaces, quotas, RBAC, NetworkPolicies, Gatekeeper constraints, and Argo CD AppProjects
 - **CLI** (`cli/`): Python CLI with Click and Rich for team/environment self-service
+- **Keycloak**: Identity provider with realm, client, and user management
 - **CRDs** (`crds/`): Team and Environment custom resource definitions (`devexforge.brianbeck.net/v1alpha1`)
-- **Helm Chart** (`deploy/helm/devexforge/`): Full deployment chart for all components
+- **Helm Chart** (`deploy/helm/devexforge/`): Full deployment chart for all components including Keycloak
+
+## Deployed Endpoints
+
+### Stage
+
+| Service | URL |
+|---------|-----|
+| API | https://devexforge-api-stage.brianbeck.net |
+| Portal | https://devexforge-stage.brianbeck.net |
+| Keycloak | https://keycloak-stage.brianbeck.net |
+| Argo CD | https://argocd-stage.brianbeck.net |
+
+### Production
+
+| Service | URL |
+|---------|-----|
+| API | https://devexforge-api.brianbeck.net |
+| Portal | https://devexforge.brianbeck.net |
+| Keycloak | https://keycloak.brianbeck.net |
+| Argo CD | https://argocd-prod.brianbeck.net |
+
+## API Endpoints
+
+| Method | Path | Description | Required Role |
+|--------|------|-------------|---------------|
+| `GET` | `/health` | Liveness check | none |
+| `GET` | `/ready` | Readiness (DB check) | none |
+| `POST` | `/api/v1/teams` | Create team | `team-leader` |
+| `GET` | `/api/v1/teams` | List teams | authenticated |
+| `GET` | `/api/v1/teams/{slug}` | Get team | team member |
+| `PATCH` | `/api/v1/teams/{slug}` | Update team | team admin |
+| `DELETE` | `/api/v1/teams/{slug}` | Delete team | team owner / platform admin |
+| `POST` | `/api/v1/teams/{slug}/members` | Add member | team admin |
+| `GET` | `/api/v1/teams/{slug}/members` | List members | team member |
+| `PATCH` | `/api/v1/teams/{slug}/members/{email}` | Change role | team admin |
+| `DELETE` | `/api/v1/teams/{slug}/members/{email}` | Remove member | team admin |
+| `POST` | `/api/v1/teams/{slug}/environments` | Create environment | team admin/developer |
+| `GET` | `/api/v1/teams/{slug}/environments` | List environments | team member |
+| `GET` | `/api/v1/teams/{slug}/environments/{tier}` | Get environment | team member |
+| `PATCH` | `/api/v1/teams/{slug}/environments/{tier}` | Update environment | team admin/developer |
+| `DELETE` | `/api/v1/teams/{slug}/environments/{tier}` | Delete environment | team admin/developer |
+| `GET` | `.../environments/{tier}/violations` | Gatekeeper violations | team member |
+| `GET` | `.../environments/{tier}/vulnerabilities` | Trivy scan results | team member |
+| `GET` | `.../environments/{tier}/security-events` | Falco alerts | team member |
+| `GET` | `.../environments/{tier}/compliance-summary` | Compliance score | team member |
+| `GET` | `.../environments/{tier}/resource-usage` | Quota usage | team member |
+| `GET` | `.../environments/{tier}/metrics` | Prometheus metrics | team member |
+| `GET` | `.../environments/{tier}/dashboards` | Grafana links | team member |
+| `POST` | `.../environments/{tier}/applications/{app}/promote` | Promote app | team admin |
+| `POST` | `.../environments/{tier}/deploy` | Deploy from catalog | team admin/developer |
+| `GET` | `/api/v1/catalog/templates` | List templates | authenticated |
+| `POST` | `/api/v1/catalog/templates` | Create template | platform admin |
+| `GET` | `/api/v1/admin/quota-presets` | List quota presets | platform admin |
+| `POST` | `/api/v1/admin/quota-presets` | Create preset | platform admin |
+| `GET` | `/api/v1/admin/policy-profiles` | List policy profiles | platform admin |
+| `POST` | `/api/v1/admin/policy-profiles` | Create profile | platform admin |
+| `GET` | `/api/v1/audit` | Platform audit log | platform admin |
+| `GET` | `/api/v1/teams/{slug}/audit` | Team audit log | team admin |
+
+## Roles and Access
+
+### Keycloak Realm Roles
+
+| Role | Purpose | Assigned To |
+|------|---------|-------------|
+| `admin` | Full platform access, bypasses team membership checks | Platform administrators |
+| `team-leader` | Can create new teams | Team leads and above |
+| *(none)* | Can log in, view teams they belong to | All authenticated users |
+
+### Per-Team Roles (stored in DevExForge database)
+
+| Role | Permissions |
+|------|-------------|
+| `admin` | Manage members, create/delete environments, update policies, promote apps |
+| `developer` | Create environments, deploy from catalog |
+| `viewer` | Read-only access to team data |
+
+Team owners are automatically assigned the `admin` role when they create a team.
+
+### Tiered Policy Floors
+
+Platform enforces minimum security standards per environment tier. Teams can make policies stricter but never weaker.
+
+| Policy | Dev | Staging | Production |
+|--------|-----|---------|------------|
+| requireNonRoot | false | true | true |
+| requireReadOnlyRoot | false | false | true |
+| maxCriticalCVEs | 5 | 0 | 0 |
+| maxHighCVEs | 20 | 10 | 0 |
+| requireResourceLimits | false | true | true |
 
 ## Prerequisites
 
@@ -80,7 +171,7 @@ npm run dev
 
 The portal is available at http://localhost:5173.
 
-## Services
+## Services (Local Development)
 
 | Service | URL | Credentials |
 |---------|-----|-------------|
@@ -91,8 +182,8 @@ The portal is available at http://localhost:5173.
 
 ## Test Users
 
-| Username | Password | Roles |
-|----------|----------|-------|
+| Username | Password | Keycloak Roles |
+|----------|----------|----------------|
 | admin | admin123 | admin, team-leader |
 | teamlead1 | password123 | team-leader |
 | developer1 | password123 | (none) |
@@ -175,33 +266,68 @@ Set these in the Travis CI project settings:
 |----------|-------|
 | `DOCKER_USERNAME` | Docker Hub username |
 | `DOCKER_PASSWORD` | Docker Hub access token |
-| `GITHUB_TOKEN` | GitHub PAT with repo access (for pushing to DevExForge-deploy) |
+| `GITHUB_TOKEN_DEVEXFORGE` | GitHub PAT with repo access (for pushing to DevExForge-deploy) |
 
 ## Cluster Deployment
 
-### Setting Up Your Deploy Repo
+### First-Time Deployment
 
-Run the setup script to generate a private GitOps repo configured for your environment:
+Run these steps in order. Steps 1-2 are one-time setup. Steps 3-5 deploy to stage, then prod.
+
+**Step 1: Create your deploy repo** (one-time)
 
 ```bash
 ./dev/init-deploy-repo.sh
 ```
 
-It will prompt for your GitHub username, Docker Hub username, cluster contexts, and domain. It creates the repo structure, Argo CD Application manifests, and per-environment Helm values -- all wired to your infrastructure.
+Generates a private GitOps repo with Argo CD Application manifests and per-environment Helm values.
 
-Deployments are managed via GitOps through the deploy repo and Argo CD.
+**Step 2: Register DNS** (one-time, re-run if Traefik IPs change)
 
-The API runs in the production cluster (production SLAs). The operator is deployed per-cluster.
+```bash
+cd ansible
+ansible-playbook playbooks/deploy-dns.yml
+```
 
-| Tier | Cluster | What Runs |
-|------|---------|-----------|
-| dev | beck-stage | Operator |
-| staging | beck-stage | Operator |
-| production | beck-prod | API, Portal, Operator, PostgreSQL |
+Creates 6 DNS records in Pi-hole (API, portal, Keycloak x stage/prod) pointing to the Traefik load balancer IPs. Requires PlatformForge vault secrets.
+
+**Step 3: Bootstrap and validate stage**
+
+```bash
+./dev/bootstrap-stage.sh
+./dev/smoke-test-stage.sh
+```
+
+**Step 4: Promote to production**
+
+```bash
+cd ../DevExForge-deploy
+bash ../DevExForge/dev/update-image-tags.sh <tag> environments/prod/values.yaml
+git add -A && git commit -m "Promote to production" && git push
+```
+
+**Step 5: Bootstrap and validate production**
+
+```bash
+./dev/bootstrap-prod.sh
+./dev/smoke-test-prod.sh
+```
+
+### What Runs Where
+
+| Component | Stage | Prod |
+|-----------|:---:|:---:|
+| API | yes | yes |
+| Portal | yes | yes |
+| Operator | yes | yes |
+| PostgreSQL | yes | yes |
+| Keycloak | yes | yes |
+
+The stage API only manages the stage cluster. The prod API manages both clusters (stage for dev/staging tiers, prod for production tier).
 
 ### Promotion Flow
 
 ```
 Push to main -> Travis CI builds & scans -> Stage auto-deploys via Argo CD
-To promote to prod -> PR to DevExForge-deploy -> Merge -> Manual Argo CD sync
+Validate with smoke tests -> Promote image tags to prod -> Manual Argo CD sync
 ```
