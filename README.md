@@ -97,6 +97,63 @@ Portal/CLI -> API (PostgreSQL) -> Syncs CRDs to cluster -> Operator watches CRDs
 
 Team owners are automatically assigned the `admin` role when they create a team.
 
+### Managing Users and Access
+
+Access control has two layers: Keycloak (authentication + platform roles) and DevExForge (team membership).
+
+#### Adding a new user
+
+Create the user in Keycloak via the admin console at `https://keycloak-stage.brianbeck.net/admin`:
+
+1. Switch to the `teams` realm (top-left dropdown)
+2. Users -> Add user -> set username, email, first/last name
+3. Credentials tab -> Set password (toggle "Temporary" off)
+4. Role mapping tab -> Assign `team-leader` if they should be able to create teams
+
+Or via the Keycloak API:
+
+```bash
+ADMIN_TOKEN=$(curl -sk -X POST "https://keycloak-stage.brianbeck.net/realms/master/protocol/openid-connect/token" \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "grant_type=password&client_id=admin-cli&username=admin&password=admin" \
+  | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
+
+curl -sk -X POST "https://keycloak-stage.brianbeck.net/admin/realms/teams/users" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "username": "newdev",
+    "email": "newdev@company.com",
+    "firstName": "New",
+    "lastName": "Developer",
+    "enabled": true,
+    "emailVerified": true,
+    "credentials": [{"type": "password", "value": "changeme", "temporary": false}]
+  }'
+```
+
+#### Adding a user to a team
+
+A team admin can add members via the CLI or API:
+
+```bash
+devex -k team members add my-team --email newdev@company.com --role developer
+```
+
+Available team roles: `admin`, `developer`, `viewer`.
+
+#### Removing access
+
+Remove a user from a team (keeps their Keycloak account):
+
+```bash
+devex -k team members remove my-team newdev@company.com
+```
+
+To disable a user entirely, toggle their account off in the Keycloak admin console (Users -> find user -> Enabled: OFF).
+
+To remove a platform role (e.g. revoke team creation ability), go to Users -> Role mapping -> remove `team-leader`.
+
 ### Tiered Policy Floors
 
 Platform enforces minimum security standards per environment tier. Teams can make policies stricter but never weaker.
@@ -331,3 +388,142 @@ The stage API only manages the stage cluster. The prod API manages both clusters
 Push to main -> Travis CI builds & scans -> Stage auto-deploys via Argo CD
 Validate with smoke tests -> Promote image tags to prod -> Manual Argo CD sync
 ```
+
+## Developer Workflow: Deploying an Application
+
+This section walks through the complete lifecycle of deploying a new application using DevExForge, from team creation to production.
+
+### Portal Capabilities
+
+| Feature | Purpose | When to Use |
+|---------|---------|-------------|
+| **Teams** | Organize developers into groups that own infrastructure | New project starts, new squad forms |
+| **Environments** | Provision namespaces with quotas, RBAC, network policies | Team needs infrastructure to deploy services |
+| **Service Catalog** | Deploy from templates (web app, API, database) via Argo CD | Developer wants to deploy without writing Helm charts |
+| **Security Posture** | View Gatekeeper violations, Trivy CVEs, Falco alerts | Before promoting to production, during incidents |
+| **Metrics** | Resource usage vs. quotas, Grafana dashboard links | Capacity planning, debugging performance |
+| **Audit Log** | Track who changed what and when | Compliance, debugging, change tracking |
+| **Admin** | Manage quota presets and policy profiles | Standardize what teams can request |
+| **Promotion** | Move an app from dev -> staging -> production | After validating, promote the exact same artifact |
+
+### Step 1: Create a team
+
+**Portal:** Teams -> Create Team
+
+**CLI:**
+```bash
+devex -k team create --name "Payments Team" --description "Payment processing services"
+```
+
+### Step 2: Add team members
+
+**Portal:** Teams -> Payments Team -> Members -> Add Member
+
+**CLI:**
+```bash
+devex -k team members add payments-team --email alice@company.com --role developer
+devex -k team members add payments-team --email bob@company.com --role developer
+```
+
+### Step 3: Create a dev environment
+
+**Portal:** Teams -> Payments Team -> Environments -> Create Environment -> tier: dev
+
+**CLI:**
+```bash
+devex -k env create payments-team --tier dev
+```
+
+The operator creates namespace `payments-team-dev` with resource quotas, network policies, RBAC (only Payments team members can deploy), and Gatekeeper constraints.
+
+### Step 4: Deploy the application
+
+**Option A -- Service Catalog (portal):**
+1. Catalog -> pick a template (e.g., "Python FastAPI")
+2. Select team and environment
+3. Set app name, customize values (image, replicas, env vars)
+4. Click Deploy
+
+**Option B -- Argo CD directly:**
+```bash
+argocd app create payments-api \
+  --project payments-team-dev \
+  --repo https://github.com/company/payments-api.git \
+  --path deploy/helm \
+  --dest-server https://kubernetes.default.svc \
+  --dest-namespace payments-team-dev \
+  --sync-policy automated \
+  --server argocd-stage.brianbeck.net --grpc-web --insecure
+```
+
+### Step 5: Validate in dev
+
+Check pods are running:
+```bash
+kubectl --context beck-stage-admin@beck-stage -n payments-team-dev get pods
+```
+
+Check security compliance (portal: Security Posture page, or CLI):
+```bash
+curl -sk -H "Authorization: Bearer $TOKEN" \
+  https://devexforge-api-stage.brianbeck.net/api/v1/teams/payments-team/environments/dev/compliance-summary
+```
+
+### Step 6: Promote to staging
+
+Create the staging environment:
+```bash
+devex -k env create payments-team --tier staging
+```
+
+Promote the application (portal: Applications -> Promote, or API):
+```bash
+curl -sk -X POST \
+  "https://devexforge-api-stage.brianbeck.net/api/v1/teams/payments-team/environments/dev/applications/payments-api/promote" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"targetTier": "staging"}'
+```
+
+Staging enforces stricter policies (requireNonRoot=true, maxCriticalCVEs=0). If your app runs as root or has critical CVEs, Gatekeeper will block deployment.
+
+### Step 7: Validate in staging
+
+Review the Security Posture page for the staging environment. Fix any violations before proceeding to production.
+
+### Step 8: Promote to production
+
+Create the production environment:
+```bash
+devex -k env create payments-team --tier production
+```
+
+Promote from staging to production with value overrides for production settings:
+```bash
+curl -sk -X POST \
+  "https://devexforge-api-stage.brianbeck.net/api/v1/teams/payments-team/environments/staging/applications/payments-api/promote" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"targetTier": "production", "valueOverrides": {"replicas": "3"}}'
+```
+
+Production enforces the strictest policies (requireReadOnlyRoot=true, maxHighCVEs=0).
+
+### Step 9: Monitor
+
+- **Metrics page:** resource usage vs. quotas, Grafana dashboard links pre-filtered to the namespace
+- **Security page:** ongoing compliance monitoring, Falco runtime alerts
+- **Audit log:** track all changes for compliance
+
+### Summary
+
+```
+Create Team -> Add Members -> Create Dev Env -> Deploy App
+  -> Validate in Dev
+  -> Create Staging Env -> Promote to Staging
+  -> Validate Security & Compliance
+  -> Create Prod Env -> Promote to Production
+  -> Monitor Metrics & Security
+```
+
+Each promotion carries the exact same artifact (chart version, image tag) forward. Policy floors get stricter at each tier, so if it passes staging, it meets production security requirements.
