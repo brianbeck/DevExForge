@@ -23,6 +23,21 @@ spec:
         runAsNonRoot: true
         runAsUser: 1001
         fsGroup: 1001
+      initContainers:
+        - name: migrate
+          image: "{{ .Values.api.image.repository }}:{{ .Values.api.image.tag }}"
+          imagePullPolicy: {{ .Values.api.image.pullPolicy }}
+          command: ["alembic", "upgrade", "head"]
+          env:
+            - name: DATABASE_URL
+              value: {{ .Values.api.env.databaseUrl }}
+            - name: PYTHONPATH
+              value: /app
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
       containers:
         - name: api
           image: "{{ .Values.api.image.repository }}:{{ .Values.api.image.tag }}"

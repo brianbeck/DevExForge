@@ -40,8 +40,7 @@ body {
 
 /* ── Layout ────────────────────────────────────────────────── */
 .layout {
-  display: grid;
-  grid-template-columns: 240px 1fr;
+  display: flex;
   min-height: 100vh;
 }
 
@@ -122,6 +121,8 @@ body {
   flex-direction: column;
   min-height: 100vh;
   margin-left: 240px;
+  flex: 1;
+  min-width: 0;
 }
 
 .topbar {
@@ -151,9 +152,47 @@ body {
 
 .main-content {
   flex: 1;
-  padding: 32px;
+  padding: 24px 32px;
   max-width: 1200px;
   width: 100%;
+}
+
+@media (max-width: 1024px) {
+  .sidebar {
+    width: 200px;
+  }
+  .main-wrapper {
+    margin-left: 200px;
+  }
+  .main-content {
+    padding: 16px 20px;
+  }
+}
+
+@media (max-width: 768px) {
+  .sidebar {
+    width: 60px;
+  }
+  .sidebar-brand h1,
+  .nav-link span:not(.nav-icon) {
+    display: none;
+  }
+  .sidebar-nav {
+    align-items: center;
+  }
+  .nav-link {
+    justify-content: center;
+    padding: 10px;
+  }
+  .main-wrapper {
+    margin-left: 60px;
+  }
+  .main-content {
+    padding: 12px 16px;
+  }
+  .topbar {
+    padding: 0 16px;
+  }
 }
 
 /* ── Page ──────────────────────────────────────────────────── */
