@@ -3,6 +3,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -66,7 +67,7 @@ async def add_member(
 
     try:
         member = await member_service.add_member(db, slug, data)
-    except ValueError as e:
+    except (ValueError, IntegrityError) as e:
         raise HTTPException(status_code=409, detail=str(e))
 
     await audit_service.log_action(

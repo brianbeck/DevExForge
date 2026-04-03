@@ -20,13 +20,13 @@ def team() -> None:
 @pass_client
 def team_create(client: DevExClient, name: str, description: str | None, cost_center: str | None) -> None:
     """Create a new team."""
-    payload: dict = {"name": name}
+    payload: dict = {"displayName": name}
     if description is not None:
         payload["description"] = description
     if cost_center is not None:
-        payload["cost_center"] = cost_center
+        payload["costCenter"] = cost_center
     result = client.post("/teams", payload)
-    print_success(f"Team '{result.get('name', name)}' created.")
+    print_success(f"Team '{result.get('displayName', name)}' created.")
     print_team(result)
 
 
@@ -34,12 +34,13 @@ def team_create(client: DevExClient, name: str, description: str | None, cost_ce
 @pass_client
 def team_list(client: DevExClient) -> None:
     """List all teams."""
-    teams = client.get("/teams")
+    data = client.get("/teams")
+    teams = data.get("teams", []) if isinstance(data, dict) else data
     if not teams:
-        print_error("No teams found.")
+        click.echo("No teams found.")
         return
     rows = [
-        [t.get("slug", "-"), t.get("name", "-"), t.get("description", "-"), t.get("cost_center", "-")]
+        [t.get("slug", "-"), t.get("displayName", "-"), t.get("description", "-") or "-", t.get("costCenter", "-") or "-"]
         for t in teams
     ]
     print_table(["Slug", "Name", "Description", "Cost Center"], rows)

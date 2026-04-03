@@ -106,6 +106,5 @@ async def transfer_ownership(
     team.owner_email = new_owner_email
     team.owner_keycloak_id = new_owner_member.keycloak_id
     new_owner_member.role = "admin"
-    team.updated_at = datetime.now(timezone.utc)
     await db.flush()
     return team

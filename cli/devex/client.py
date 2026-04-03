@@ -22,12 +22,15 @@ class DevExClient:
         self,
         base_url: str | None = None,
         token: str | None = None,
+        insecure: bool = False,
     ) -> None:
-        self.base_url = (
+        raw_url = (
             base_url
             or os.environ.get("DEVEXFORGE_API_URL")
             or DEFAULT_API_URL
         ).rstrip("/")
+        # Ensure base URL includes the API prefix
+        self.base_url = raw_url if raw_url.endswith("/api/v1") else f"{raw_url}/api/v1"
         self.token = token or os.environ.get("DEVEXFORGE_TOKEN")
         headers: dict[str, str] = {"Accept": "application/json"}
         if self.token:
@@ -36,6 +39,7 @@ class DevExClient:
             base_url=self.base_url,
             headers=headers,
             timeout=DEFAULT_TIMEOUT,
+            verify=not insecure,
         )
 
     # -- low-level helpers ---------------------------------------------------

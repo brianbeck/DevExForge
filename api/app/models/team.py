@@ -26,7 +26,6 @@ class Team(Base):
         DateTime(timezone=True),
         nullable=False,
         default=lambda: datetime.now(timezone.utc),
-        onupdate=lambda: datetime.now(timezone.utc),
     )
 
     members: Mapped[list["TeamMember"]] = relationship(

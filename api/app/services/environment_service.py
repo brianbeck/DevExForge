@@ -114,7 +114,6 @@ async def update_environment(
     if data.argocd is not None:
         env.argocd_config = data.argocd.model_dump(by_alias=True)
 
-    env.updated_at = datetime.now(timezone.utc)
     await db.flush()
     return env
 

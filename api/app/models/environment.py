@@ -31,7 +31,6 @@ class Environment(Base):
         DateTime(timezone=True),
         nullable=False,
         default=lambda: datetime.now(timezone.utc),
-        onupdate=lambda: datetime.now(timezone.utc),
     )
 
     team: Mapped["Team"] = relationship("Team", back_populates="environments")

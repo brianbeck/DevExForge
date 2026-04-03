@@ -102,7 +102,6 @@ async def update_team(db: AsyncSession, slug: str, data: TeamUpdate) -> Team | N
     if data.tags is not None:
         team.tags = data.tags
 
-    team.updated_at = datetime.now(timezone.utc)
     await db.flush()
     return team
 
