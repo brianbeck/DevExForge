@@ -39,7 +39,8 @@
       "Bash(xargs ls:*)",
       "Bash(grep -l \"alias=\" /Users/beck/src/DevExForge/api/app/schemas/*.py)",
       "Bash(grep:*)",
-      "Bash(chmod:*)"
+      "Bash(chmod:*)",
+      "Bash(python -m pytest tests/ -q)"
     ]
   }
 }

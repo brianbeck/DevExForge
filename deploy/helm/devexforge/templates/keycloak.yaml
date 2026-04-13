@@ -7,6 +7,7 @@ metadata:
   labels:
     {{- include "devexforge.labels" . | nindent 4 }}
 ---
+{{- if not .Values.sealedSecrets.enabled }}
 apiVersion: v1
 kind: Secret
 metadata:
@@ -20,6 +21,7 @@ stringData:
   POSTGRES_USER: {{ .Values.keycloak.db.username }}
   POSTGRES_PASSWORD: {{ .Values.keycloak.db.password }}
 ---
+{{- end }}
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -220,7 +222,14 @@ spec:
             - name: KEYCLOAK_ADMIN
               value: {{ .Values.keycloak.adminUser }}
             - name: KEYCLOAK_ADMIN_PASSWORD
+              {{- if .Values.sealedSecrets.enabled }}
+              valueFrom:
+                secretKeyRef:
+                  name: keycloak-admin-credentials
+                  key: admin-password
+              {{- else }}
               value: {{ .Values.keycloak.adminPassword }}
+              {{- end }}
             - name: KC_HTTP_ENABLED
               value: "true"
             - name: KC_HOSTNAME_STRICT
@@ -280,7 +289,12 @@ metadata:
   annotations:
     traefik.ingress.kubernetes.io/router.entrypoints: websecure
     traefik.ingress.kubernetes.io/router.tls: "true"
+    cert-manager.io/cluster-issuer: letsencrypt-prod
 spec:
+  tls:
+    - hosts:
+        - {{ .Values.keycloak.ingress.host }}
+      secretName: keycloak-tls
   rules:
     - host: {{ .Values.keycloak.ingress.host }}
       http:

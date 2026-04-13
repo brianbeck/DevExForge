@@ -2,7 +2,7 @@
 
 Developer Experience platform for Kubernetes: self-service team and namespace management with policy enforcement, built on FastAPI, React, and Kopf.
 
-Built on top of [PlatformForge](https://github.com/brianbeck/PlatformForge), which provides the underlying Kubernetes clusters with Traefik, Argo CD, Gatekeeper, Falco, Trivy, and observability stack.
+Built on top of PlatformForge, which provides the underlying Kubernetes clusters with Traefik, Argo CD, Gatekeeper, Falco, Trivy, and observability stack.
 
 ## Architecture
 
@@ -21,23 +21,25 @@ Portal/CLI -> API (PostgreSQL) -> Syncs CRDs to cluster -> Operator watches CRDs
 
 ## Deployed Endpoints
 
+Configure your domain via the deploy repo values files. The default naming convention:
+
 ### Stage
 
-| Service | URL |
-|---------|-----|
-| API | https://devexforge-api-stage.brianbeck.net |
-| Portal | https://devexforge-stage.brianbeck.net |
-| Keycloak | https://keycloak-stage.brianbeck.net |
-| Argo CD | https://argocd-stage.brianbeck.net |
+| Service | URL Pattern |
+|---------|-------------|
+| API | `https://devexforge-api-stage.<domain>` |
+| Portal | `https://devexforge-stage.<domain>` |
+| Keycloak | `https://keycloak-stage.<domain>` |
+| Argo CD | `https://argocd-stage.<domain>` |
 
 ### Production
 
-| Service | URL |
-|---------|-----|
-| API | https://devexforge-api.brianbeck.net |
-| Portal | https://devexforge.brianbeck.net |
-| Keycloak | https://keycloak.brianbeck.net |
-| Argo CD | https://argocd-prod.brianbeck.net |
+| Service | URL Pattern |
+|---------|-------------|
+| API | `https://devexforge-api.<domain>` |
+| Portal | `https://devexforge.<domain>` |
+| Keycloak | `https://keycloak.<domain>` |
+| Argo CD | `https://argocd-prod.<domain>` |
 
 ## API Endpoints
 
@@ -103,7 +105,7 @@ Access control has two layers: Keycloak (authentication + platform roles) and De
 
 #### Adding a new user
 
-Create the user in Keycloak via the admin console at `https://keycloak-stage.brianbeck.net/admin`:
+Create the user in Keycloak via the admin console at `https://keycloak-stage.<domain>/admin`:
 
 1. Switch to the `teams` realm (top-left dropdown)
 2. Users -> Add user -> set username, email, first/last name
@@ -113,12 +115,12 @@ Create the user in Keycloak via the admin console at `https://keycloak-stage.bri
 Or via the Keycloak API:
 
 ```bash
-ADMIN_TOKEN=$(curl -sk -X POST "https://keycloak-stage.brianbeck.net/realms/master/protocol/openid-connect/token" \
+ADMIN_TOKEN=$(curl -sk -X POST "https://keycloak-stage.<domain>/realms/master/protocol/openid-connect/token" \
   -H "Content-Type: application/x-www-form-urlencoded" \
   -d "grant_type=password&client_id=admin-cli&username=admin&password=admin" \
   | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
 
-curl -sk -X POST "https://keycloak-stage.brianbeck.net/admin/realms/teams/users" \
+curl -sk -X POST "https://keycloak-stage.<domain>/admin/realms/teams/users" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -311,9 +313,9 @@ Travis CI runs on every push to `main`:
 | Stage | What It Does |
 |-------|-------------|
 | **test** | Runs `pytest` on the API |
-| **build** | Builds and pushes Docker images to Docker Hub (`brianbeck/devexforge-{api,portal,operator}`) |
+| **build** | Builds and pushes Docker images to Docker Hub (`<registry>/devexforge-{api,portal,operator}`) |
 | **scan** | Trivy scans all images, fails the build on CRITICAL CVEs |
-| **deploy** | Updates image tags in [DevExForge-deploy](https://github.com/brianbeck/DevExForge-deploy) for stage (automatic) |
+| **deploy** | Updates image tags in the private deploy repo for stage (automatic) |
 
 ### Travis CI Environment Variables
 
@@ -453,7 +455,7 @@ argocd app create payments-api \
   --dest-server https://kubernetes.default.svc \
   --dest-namespace payments-team-dev \
   --sync-policy automated \
-  --server argocd-stage.brianbeck.net --grpc-web --insecure
+  --server argocd-stage.<domain> --grpc-web --insecure
 ```
 
 ### Step 5: Validate in dev
@@ -466,7 +468,7 @@ kubectl --context beck-stage-admin@beck-stage -n payments-team-dev get pods
 Check security compliance (portal: Security Posture page, or CLI):
 ```bash
 curl -sk -H "Authorization: Bearer $TOKEN" \
-  https://devexforge-api-stage.brianbeck.net/api/v1/teams/payments-team/environments/dev/compliance-summary
+  https://devexforge-api-stage.<domain>/api/v1/teams/payments-team/environments/dev/compliance-summary
 ```
 
 ### Step 6: Promote to staging
@@ -479,7 +481,7 @@ devex -k env create payments-team --tier staging
 Promote the application (portal: Applications -> Promote, or API):
 ```bash
 curl -sk -X POST \
-  "https://devexforge-api-stage.brianbeck.net/api/v1/teams/payments-team/environments/dev/applications/payments-api/promote" \
+  "https://devexforge-api-stage.<domain>/api/v1/teams/payments-team/environments/dev/applications/payments-api/promote" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"targetTier": "staging"}'
@@ -501,7 +503,7 @@ devex -k env create payments-team --tier production
 Promote from staging to production with value overrides for production settings:
 ```bash
 curl -sk -X POST \
-  "https://devexforge-api-stage.brianbeck.net/api/v1/teams/payments-team/environments/staging/applications/payments-api/promote" \
+  "https://devexforge-api-stage.<domain>/api/v1/teams/payments-team/environments/staging/applications/payments-api/promote" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"targetTier": "production", "valueOverrides": {"replicas": "3"}}'

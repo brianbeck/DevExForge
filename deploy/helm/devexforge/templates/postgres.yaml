@@ -1,4 +1,5 @@
 {{- if .Values.postgres.enabled }}
+{{- if not .Values.sealedSecrets.enabled }}
 apiVersion: v1
 kind: Secret
 metadata:
@@ -12,6 +13,7 @@ stringData:
   POSTGRES_USER: {{ .Values.postgres.credentials.username }}
   POSTGRES_PASSWORD: {{ .Values.postgres.credentials.password }}
 ---
+{{- end }}
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:

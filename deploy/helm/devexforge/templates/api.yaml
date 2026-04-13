@@ -30,7 +30,14 @@ spec:
           command: ["alembic", "upgrade", "head"]
           env:
             - name: DATABASE_URL
+              {{- if .Values.sealedSecrets.enabled }}
+              valueFrom:
+                secretKeyRef:
+                  name: devexforge-api-credentials
+                  key: database-url
+              {{- else }}
               value: {{ .Values.api.env.databaseUrl }}
+              {{- end }}
             - name: PYTHONPATH
               value: /app
           securityContext:
@@ -46,7 +53,14 @@ spec:
             - containerPort: 8000
           env:
             - name: DATABASE_URL
+              {{- if .Values.sealedSecrets.enabled }}
+              valueFrom:
+                secretKeyRef:
+                  name: devexforge-api-credentials
+                  key: database-url
+              {{- else }}
               value: {{ .Values.api.env.databaseUrl }}
+              {{- end }}
             - name: KEYCLOAK_URL
               value: {{ .Values.api.env.keycloakUrl }}
             - name: KEYCLOAK_ISSUER_URL
@@ -170,7 +184,12 @@ metadata:
   annotations:
     traefik.ingress.kubernetes.io/router.entrypoints: websecure
     traefik.ingress.kubernetes.io/router.tls: "true"
+    cert-manager.io/cluster-issuer: letsencrypt-prod
 spec:
+  tls:
+    - hosts:
+        - {{ .Values.api.ingress.host }}
+      secretName: devexforge-api-tls
   rules:
     - host: {{ .Values.api.ingress.host }}
       http:

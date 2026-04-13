@@ -1,8 +1,11 @@
 namespace: engineering-platform
 
+sealedSecrets:
+  enabled: false
+
 api:
   image:
-    repository: brianbeck/devexforge-api
+    repository: example/devexforge-api
     tag: "0.1.0"
     pullPolicy: IfNotPresent
   replicas: 2
@@ -14,20 +17,20 @@ api:
       cpu: 500m
       memory: 256Mi
   env:
-    databaseUrl: postgresql+asyncpg://devexforge:devexforge@devexforge-postgres:5432/devexforge
+    databaseUrl: postgresql+asyncpg://devexforge:changeme@devexforge-postgres:5432/devexforge
     keycloakUrl: http://keycloak-service.keycloak.svc.cluster.local:8080
     keycloakRealm: teams
     keycloakClientId: devexforge-api
-    corsOrigins: '["https://devexforge.brianbeck.net"]'
+    corsOrigins: '["https://portal.example.com"]'
     k8sInCluster: "true"
-    k8sStageContext: beck-stage-admin@beck-stage
-    k8sProdContext: beck-prod-admin@beck-prod
+    k8sStageContext: ""
+    k8sProdContext: ""
   ingress:
-    host: devexforge-api.brianbeck.net
+    host: api.example.com
 
 portal:
   image:
-    repository: brianbeck/devexforge-portal
+    repository: example/devexforge-portal
     tag: "0.1.0"
     pullPolicy: IfNotPresent
   replicas: 2
@@ -39,11 +42,11 @@ portal:
       cpu: 200m
       memory: 128Mi
   ingress:
-    host: devexforge.brianbeck.net
+    host: portal.example.com
 
 operator:
   image:
-    repository: brianbeck/devexforge-operator
+    repository: example/devexforge-operator
     tag: "0.1.0"
     pullPolicy: IfNotPresent
   replicas: 1
@@ -66,13 +69,13 @@ keycloak:
     repository: quay.io/keycloak/keycloak
     tag: "25.0"
   adminUser: admin
-  adminPassword: admin
+  adminPassword: changeme
   db:
     username: keycloak
-    password: keycloak
+    password: changeme
     storage: 2Gi
   ingress:
-    host: keycloak.brianbeck.net
+    host: keycloak.example.com
 
 postgres:
   enabled: true
@@ -92,4 +95,4 @@ postgres:
   credentials:
     database: devexforge
     username: devexforge
-    password: devexforge
+    password: changeme

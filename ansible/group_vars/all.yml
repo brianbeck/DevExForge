@@ -1,14 +1,18 @@
 ---
 # DevExForge Ansible configuration
+# Override these with -e or in a local vars file
 
 # PlatformForge location (override with -e platformforge_dir=/path/to/PlatformForge)
 # Default: sibling directory to DevExForge
 platformforge_dir: "{{ playbook_dir }}/../../../PlatformForge"
 
-# DevExForge hostnames
-devexforge_api_hostname_stage: "devexforge-api-stage.brianbeck.net"
-devexforge_api_hostname_prod: "devexforge-api.brianbeck.net"
-devexforge_portal_hostname_stage: "devexforge-stage.brianbeck.net"
-devexforge_portal_hostname_prod: "devexforge.brianbeck.net"
-keycloak_hostname_stage: "keycloak-stage.brianbeck.net"
-keycloak_hostname_prod: "keycloak.brianbeck.net"
+# Base domain (override with -e base_domain=yourdomain.com)
+base_domain: "example.com"
+
+# DevExForge hostnames (derived from base_domain)
+devexforge_api_hostname_stage: "devexforge-api-stage.{{ base_domain }}"
+devexforge_api_hostname_prod: "devexforge-api.{{ base_domain }}"
+devexforge_portal_hostname_stage: "devexforge-stage.{{ base_domain }}"
+devexforge_portal_hostname_prod: "devexforge.{{ base_domain }}"
+keycloak_hostname_stage: "keycloak-stage.{{ base_domain }}"
+keycloak_hostname_prod: "keycloak.{{ base_domain }}"

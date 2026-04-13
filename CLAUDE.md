@@ -19,18 +19,25 @@ Developer Experience platform built on top of PlatformForge.
 - API-first with CRD as projection (API writes PostgreSQL, then syncs CRDs to cluster).
 - Tiered policy floors: platform enforces minimum security per tier (dev < staging < production). Teams can only make policies stricter.
 - Namespace naming: `{team-slug}-{tier}` (e.g. `backend-platform-dev`).
-- Tier-to-cluster mapping: dev/staging -> beck-stage, production -> beck-prod.
+- Tier-to-cluster mapping configurable via TIER_CLUSTER_MAP env var.
 - Application promotion via Argo CD Application CRs (forward-only: dev -> staging -> production).
+- Secrets managed via Sealed Secrets (encrypted in Git, decrypted by controller in cluster).
+- TLS certificates managed by cert-manager with Let's Encrypt.
 
 ## Infrastructure Available (from PlatformForge)
-- Stage cluster: beck-stage-admin@beck-stage
-- Prod cluster: beck-prod-admin@beck-prod
-- Traefik ingress: *.brianbeck.net
-- Argo CD: argocd-stage.brianbeck.net / argocd-prod.brianbeck.net
-- Grafana: grafana-stage.brianbeck.net / grafana-prod.brianbeck.net
-- Prometheus: prometheus-stage.brianbeck.net / prometheus-prod.brianbeck.net
+- Stage and prod Kubernetes clusters (contexts configured in kubeconfig)
+- Traefik ingress controller
+- Argo CD for GitOps
+- Grafana, Prometheus, Alertmanager for observability
 - Gatekeeper enforcing policies on application namespaces
 - Trivy Operator scanning all running workloads
+- Sealed Secrets controller for secret management
+- cert-manager with Let's Encrypt ClusterIssuer
+
+## Configuration
+- Environment-specific values are in the private DevExForge-deploy repo
+- Hostnames, cluster contexts, and credentials are NOT stored in this public repo
+- Default values.yaml uses example.com placeholders
 
 ## Local Development
 ```bash
