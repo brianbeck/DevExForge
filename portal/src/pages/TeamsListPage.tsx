@@ -13,7 +13,10 @@ export default function TeamsListPage() {
     displayName: "",
     description: "",
     costCenter: "",
+    tags: {},
   });
+  const [tagKey, setTagKey] = useState("");
+  const [tagValue, setTagValue] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   async function fetchTeams() {
@@ -39,7 +42,9 @@ export default function TeamsListPage() {
     try {
       await createTeam(formData);
       setShowForm(false);
-      setFormData({ displayName: "", description: "", costCenter: "" });
+      setFormData({ displayName: "", description: "", costCenter: "", tags: {} });
+      setTagKey("");
+      setTagValue("");
       await fetchTeams();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create team");
@@ -103,6 +108,59 @@ export default function TeamsListPage() {
               }
             />
           </div>
+          <div className="form-group">
+            <label>Tags</label>
+            <div style={{ display: "flex", gap: "8px", marginBottom: "8px" }}>
+              <input
+                type="text"
+                placeholder="Key"
+                value={tagKey}
+                onChange={(e) => setTagKey(e.target.value)}
+                style={{ flex: 1 }}
+              />
+              <input
+                type="text"
+                placeholder="Value"
+                value={tagValue}
+                onChange={(e) => setTagValue(e.target.value)}
+                style={{ flex: 1 }}
+              />
+              <button
+                type="button"
+                className="btn btn-sm"
+                onClick={() => {
+                  if (tagKey.trim()) {
+                    setFormData({
+                      ...formData,
+                      tags: { ...(formData.tags || {}), [tagKey.trim()]: tagValue.trim() },
+                    });
+                    setTagKey("");
+                    setTagValue("");
+                  }
+                }}
+              >
+                Add
+              </button>
+            </div>
+            {formData.tags && Object.keys(formData.tags).length > 0 && (
+              <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                {Object.entries(formData.tags).map(([k, v]) => (
+                  <span
+                    key={k}
+                    className="badge"
+                    style={{ cursor: "pointer" }}
+                    onClick={() => {
+                      const { [k]: _, ...rest } = formData.tags || {};
+                      setFormData({ ...formData, tags: rest });
+                    }}
+                    title="Click to remove"
+                  >
+                    {k}: {v} &times;
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
           <button className="btn btn-primary" type="submit" disabled={submitting}>
             {submitting ? "Creating..." : "Create"}
           </button>
@@ -124,6 +182,13 @@ export default function TeamsListPage() {
               <h3>{team.displayName}</h3>
               {team.description && (
                 <p className="card-description">{team.description}</p>
+              )}
+              {team.tags && Object.keys(team.tags).length > 0 && (
+                <div style={{ display: "flex", gap: "4px", flexWrap: "wrap", marginBottom: "8px" }}>
+                  {Object.entries(team.tags).map(([k, v]) => (
+                    <span key={k} className="badge badge-sm">{k}: {v}</span>
+                  ))}
+                </div>
               )}
               <div className="card-meta">
                 <span>Owner: {team.ownerEmail}</span>
