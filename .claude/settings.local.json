@@ -40,7 +40,12 @@
       "Bash(grep -l \"alias=\" /Users/beck/src/DevExForge/api/app/schemas/*.py)",
       "Bash(grep:*)",
       "Bash(chmod:*)",
-      "Bash(python -m pytest tests/ -q)"
+      "Bash(python -m pytest tests/ -q)",
+      "Bash(ls tsconfig*.json)",
+      "Bash(npx tsc *)",
+      "Bash(ls .venv/bin/python* venv/bin/python*)",
+      "Bash(ls */bin/python)",
+      "Bash(../.venv/bin/python -m pytest tests/ -q)"
     ]
   }
 }

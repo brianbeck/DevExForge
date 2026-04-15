@@ -880,3 +880,112 @@ select:focus {
   gap: 0.25rem;
   font-size: 0.85rem;
 }
+
+/* Application inventory grid */
+.inventory-grid {
+  display: grid;
+  gap: 1px;
+  background: var(--border, #e0e0e0);
+  border: 1px solid var(--border, #e0e0e0);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.inventory-grid .inventory-header,
+.inventory-grid .inventory-row {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 1fr;
+  gap: 1px;
+  background: var(--border, #e0e0e0);
+}
+
+.inventory-grid.with-team .inventory-header,
+.inventory-grid.with-team .inventory-row {
+  grid-template-columns: 1fr 2fr 1fr 1fr 1fr;
+}
+
+.inventory-cell {
+  background: var(--surface, #ffffff);
+  padding: 12px 16px;
+  min-height: 64px;
+}
+
+.inventory-header .inventory-cell {
+  background: var(--bg, #f8f9fa);
+  font-weight: 600;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  color: var(--text-muted, #64748b);
+}
+
+.inventory-row:hover .inventory-cell {
+  background: var(--bg-hover, #f1f5f9);
+  cursor: pointer;
+}
+
+.inventory-cell.empty {
+  color: var(--text-muted, #94a3b8);
+  font-style: italic;
+}
+
+.inventory-version {
+  font-family: monospace;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.inventory-meta {
+  font-size: 0.75rem;
+  color: var(--text-muted, #64748b);
+  margin-top: 4px;
+}
+
+/* Health badges */
+.health-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+.health-badge.healthy { background: #d1fae5; color: #065f46; }
+.health-badge.progressing { background: #fef3c7; color: #92400e; }
+.health-badge.degraded { background: #fee2e2; color: #991b1b; }
+.health-badge.missing { background: #fee2e2; color: #991b1b; }
+.health-badge.unknown { background: #e5e7eb; color: #374151; }
+.health-badge.suspended { background: #e0e7ff; color: #3730a3; }
+
+/* Deployment card grid (application detail page) */
+.deployment-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.deployment-card {
+  padding: 16px;
+  border: 1px solid var(--border, #e0e0e0);
+  border-radius: 8px;
+  background: var(--surface, #ffffff);
+}
+
+.deployment-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.deployment-card h4 {
+  margin: 0;
+  text-transform: capitalize;
+}
+
+.deployment-meta {
+  display: grid;
+  gap: 6px;
+  font-size: 0.85rem;
+  margin: 12px 0;
+}
+.deployment-meta dt { color: var(--text-muted, #64748b); }
+.deployment-meta dd { margin: 0; font-family: monospace; }

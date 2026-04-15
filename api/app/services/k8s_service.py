@@ -179,6 +179,107 @@ class K8sService:
                 )
             raise
 
+    def list_argo_applications(
+        self,
+        cluster: str,
+        namespace: str = "argocd",
+        label_selector: str | None = None,
+    ) -> list[dict]:
+        """List Argo CD Application CRs in the specified cluster/namespace.
+
+        Optionally filter by label selector (e.g., 'devexforge.brianbeck.net/managed-by=devexforge').
+        Returns list of Application CR dicts.
+        """
+        api = self._get_api(cluster)
+        try:
+            kwargs = {
+                "group": "argoproj.io",
+                "version": "v1alpha1",
+                "namespace": namespace,
+                "plural": "applications",
+            }
+            if label_selector:
+                kwargs["label_selector"] = label_selector
+            result = api.list_namespaced_custom_object(**kwargs)
+            return result.get("items", [])
+        except ApiException as e:
+            if e.status == 404:
+                return []
+            raise
+
+    def delete_argo_application(
+        self,
+        cluster: str,
+        namespace: str,
+        app_name: str,
+    ) -> None:
+        """Delete an Argo CD Application CR. Safe if the app doesn't exist."""
+        api = self._get_api(cluster)
+        try:
+            api.delete_namespaced_custom_object(
+                group="argoproj.io",
+                version="v1alpha1",
+                namespace=namespace,
+                plural="applications",
+                name=app_name,
+            )
+            logger.info("Deleted Argo CD Application '%s' in %s/%s", app_name, cluster, namespace)
+        except ApiException as e:
+            if e.status == 404:
+                logger.info("Argo CD Application '%s' already deleted in %s", app_name, cluster)
+            else:
+                raise
+
+    def get_argo_application_health(
+        self,
+        cluster: str,
+        namespace: str,
+        app_name: str,
+    ) -> dict | None:
+        """Return a normalized health summary for an Argo CD Application.
+
+        Returns None if the Application doesn't exist.
+        Returns dict with keys:
+          health_status: str  (from status.health.status, e.g. 'Healthy', 'Degraded', 'Progressing')
+          sync_status:   str  (from status.sync.status, e.g. 'Synced', 'OutOfSync', 'Unknown')
+          revision:      str  (from status.sync.revision)
+          target_revision: str (from spec.source.targetRevision)
+          source_repo:   str  (from spec.source.repoURL)
+          image_tag:     str | None  (parsed from status.summary.images if present)
+          last_sync_at:  str | None  (from status.operationState.finishedAt if present)
+          raw:           dict (full Application CR)
+        """
+        app = self.get_argo_application(cluster, namespace, app_name)
+        if app is None:
+            return None
+
+        status = app.get("status", {}) or {}
+        spec = app.get("spec", {}) or {}
+        health = status.get("health", {}) or {}
+        sync = status.get("sync", {}) or {}
+        summary = status.get("summary", {}) or {}
+        op_state = status.get("operationState", {}) or {}
+        source = spec.get("source", {}) or {}
+
+        # Try to extract primary image tag from summary.images (format: "repo/image:tag")
+        image_tag: str | None = None
+        images = summary.get("images", [])
+        if images:
+            first = images[0]
+            if ":" in first:
+                image_tag = first.rsplit(":", 1)[-1]
+
+        return {
+            "health_status": health.get("status") or "Unknown",
+            "sync_status": sync.get("status") or "Unknown",
+            "revision": sync.get("revision") or "",
+            "target_revision": source.get("targetRevision") or "",
+            "source_repo": source.get("repoURL") or "",
+            "image_tag": image_tag,
+            "last_sync_at": op_state.get("finishedAt"),
+            "raw": app,
+        }
+
     def _get_core_api(self, cluster: str) -> client.CoreV1Api:
         """Get CoreV1Api for the specified cluster."""
         # Reuse the api_client from the CustomObjectsApi

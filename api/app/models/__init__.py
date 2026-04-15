@@ -3,6 +3,11 @@ from app.models.environment import Environment
 from app.models.audit import AuditLog
 from app.models.catalog import CatalogTemplate
 from app.models.admin import QuotaPreset, PolicyProfile
+from app.models.application import (
+    Application,
+    ApplicationDeployment,
+    ApplicationDeploymentEvent,
+)
 
 __all__ = [
     "Team",
@@ -12,4 +17,7 @@ __all__ = [
     "CatalogTemplate",
     "QuotaPreset",
     "PolicyProfile",
+    "Application",
+    "ApplicationDeployment",
+    "ApplicationDeploymentEvent",
 ]

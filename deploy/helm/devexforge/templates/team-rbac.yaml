@@ -1,0 +1,115 @@
+{{- if ne (toString .Values.teamRbac.enabled) "false" }}
+---
+# Read-only role for team members: view everything + read logs + exec (for debugging).
+# Cannot create/update/delete workload resources. All changes must go through DevExForge API.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: devexforge-namespace-viewer
+  labels:
+    {{- include "devexforge.labels" . | nindent 4 }}
+rules:
+  # Full view of all core resources
+  - apiGroups: [""]
+    resources:
+      - pods
+      - services
+      - configmaps
+      - secrets
+      - persistentvolumeclaims
+      - events
+      - serviceaccounts
+      - endpoints
+      - replicationcontrollers
+      - resourcequotas
+      - limitranges
+    verbs: [get, list, watch]
+  # Full view of apps resources
+  - apiGroups: [apps]
+    resources:
+      - deployments
+      - statefulsets
+      - daemonsets
+      - replicasets
+    verbs: [get, list, watch]
+  # Full view of batch resources
+  - apiGroups: [batch]
+    resources:
+      - jobs
+      - cronjobs
+    verbs: [get, list, watch]
+  # Full view of networking
+  - apiGroups: [networking.k8s.io]
+    resources:
+      - ingresses
+      - networkpolicies
+    verbs: [get, list, watch]
+  # Pod logs and exec for debugging
+  - apiGroups: [""]
+    resources: [pods/log]
+    verbs: [get, list]
+  - apiGroups: [""]
+    resources: [pods/exec, pods/portforward, pods/attach]
+    verbs: [create, get]
+  # View Argo CD Applications in team namespace for visibility
+  - apiGroups: [argoproj.io]
+    resources: [applications, appprojects]
+    verbs: [get, list, watch]
+  # View Gatekeeper constraints
+  - apiGroups: [constraints.gatekeeper.sh]
+    resources: ["*"]
+    verbs: [get, list, watch]
+---
+# Team admin role: same as viewer for now.
+# Team admins manage members and environments via DevExForge API, not directly in cluster.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: devexforge-namespace-admin
+  labels:
+    {{- include "devexforge.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources:
+      - pods
+      - services
+      - configmaps
+      - secrets
+      - persistentvolumeclaims
+      - events
+      - serviceaccounts
+      - endpoints
+      - replicationcontrollers
+      - resourcequotas
+      - limitranges
+    verbs: [get, list, watch]
+  - apiGroups: [apps]
+    resources:
+      - deployments
+      - statefulsets
+      - daemonsets
+      - replicasets
+    verbs: [get, list, watch]
+  - apiGroups: [batch]
+    resources:
+      - jobs
+      - cronjobs
+    verbs: [get, list, watch]
+  - apiGroups: [networking.k8s.io]
+    resources:
+      - ingresses
+      - networkpolicies
+    verbs: [get, list, watch]
+  - apiGroups: [""]
+    resources: [pods/log]
+    verbs: [get, list]
+  - apiGroups: [""]
+    resources: [pods/exec, pods/portforward, pods/attach]
+    verbs: [create, get]
+  - apiGroups: [argoproj.io]
+    resources: [applications, appprojects]
+    verbs: [get, list, watch]
+  - apiGroups: [constraints.gatekeeper.sh]
+    resources: ["*"]
+    verbs: [get, list, watch]
+{{- end }}

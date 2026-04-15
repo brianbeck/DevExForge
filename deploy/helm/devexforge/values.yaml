@@ -3,6 +3,9 @@ namespace: engineering-platform
 sealedSecrets:
   enabled: false
 
+teamRbac:
+  enabled: true
+
 api:
   image:
     repository: example/devexforge-api

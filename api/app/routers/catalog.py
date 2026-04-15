@@ -1,4 +1,6 @@
 import logging
+import re
+from datetime import datetime, timezone
 from typing import Annotated
 from uuid import UUID
 
@@ -8,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.middleware.auth import CurrentUser, get_current_user, require_role
+from app.models.application import Application, ApplicationDeployment, ApplicationDeploymentEvent
 from app.models.catalog import CatalogTemplate
 from app.models.environment import Environment
 from app.models.team import Team
@@ -155,6 +158,8 @@ async def deploy_from_template(
             detail=f"Failed to create Argo CD Application: {e}",
         )
 
+    await _upsert_application_deployment(db, team, env, template, data, user, merged_values)
+
     await audit_service.log_action(
         db,
         user_email=user.email,
@@ -226,6 +231,115 @@ async def _validate_deploy_request(
         )
 
     return team, env, template
+
+
+def _slugify_app_name(name: str) -> str:
+    """Normalize an app name into a DB-safe lowercase-dashed slug."""
+    slug = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
+    return slug or "app"
+
+
+async def _upsert_application_deployment(
+    db: AsyncSession,
+    team: Team,
+    env: Environment,
+    template: CatalogTemplate,
+    data: DeployRequest,
+    user: CurrentUser,
+    values: dict,
+) -> ApplicationDeployment:
+    """Register the Application (if new) and upsert its ApplicationDeployment + event."""
+    app_slug = _slugify_app_name(data.app_name)
+    argocd_app_name = f"{team.slug}-{data.app_name}"
+
+    image_tag = None
+    if isinstance(values, dict):
+        image_section = values.get("image")
+        if isinstance(image_section, dict):
+            tag = image_section.get("tag")
+            if tag is not None:
+                image_tag = str(tag)
+
+    chart_version = template.chart_version
+
+    # 1. Look up or create the Application
+    app_result = await db.execute(
+        select(Application).where(
+            Application.team_id == team.id,
+            Application.name == app_slug,
+        )
+    )
+    application = app_result.scalar_one_or_none()
+    if application is None:
+        application = Application(
+            team_id=team.id,
+            name=app_slug,
+            display_name=data.app_name,
+            description=f"Deployed from catalog template '{template.name}'",
+            repo_url=template.chart_repo or "",
+            chart_path=template.chart_name or "",
+            chart_repo_url=template.chart_repo,
+            owner_email=user.email,
+            default_strategy="rolling",
+            app_metadata={
+                "source": "catalog",
+                "template_id": str(template.id),
+                "template_name": template.name,
+            },
+        )
+        db.add(application)
+        await db.flush()
+
+    # 2. Look up or create ApplicationDeployment
+    dep_result = await db.execute(
+        select(ApplicationDeployment).where(
+            ApplicationDeployment.application_id == application.id,
+            ApplicationDeployment.environment_id == env.id,
+        )
+    )
+    deployment = dep_result.scalar_one_or_none()
+    previous_image_tag = deployment.image_tag if deployment is not None else None
+    now = datetime.now(timezone.utc)
+
+    if deployment is None:
+        deployment = ApplicationDeployment(
+            application_id=application.id,
+            environment_id=env.id,
+            argocd_app_name=argocd_app_name,
+            image_tag=image_tag,
+            chart_version=chart_version,
+            strategy="rolling",
+            deployed_at=now,
+            deployed_by=user.email,
+            health_status="Progressing",
+            sync_status="Unknown",
+        )
+        db.add(deployment)
+    else:
+        deployment.argocd_app_name = argocd_app_name
+        deployment.image_tag = image_tag
+        deployment.chart_version = chart_version
+        deployment.strategy = "rolling"
+        deployment.deployed_at = now
+        deployment.deployed_by = user.email
+        deployment.health_status = "Progressing"
+        deployment.sync_status = "Unknown"
+
+    await db.flush()
+
+    # 3. Append a sync_started event
+    event = ApplicationDeploymentEvent(
+        deployment_id=deployment.id,
+        event_type="sync_started",
+        from_version=previous_image_tag,
+        to_version=image_tag,
+        actor=user.email,
+        details={"source": "catalog", "template": template.name},
+    )
+    db.add(event)
+    await db.flush()
+
+    return deployment
 
 
 def _build_argo_application(

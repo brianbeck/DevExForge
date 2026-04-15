@@ -32,7 +32,7 @@ rules:
   - apiGroups: [rbac.authorization.k8s.io]
     resources: [clusterroles]
     verbs: [bind]
-    resourceNames: [admin, edit, view]
+    resourceNames: [devexforge-namespace-admin, devexforge-namespace-viewer]
   - apiGroups: [constraints.gatekeeper.sh]
     resources: ["*"]
     verbs: [get, list, create, update, patch, delete]

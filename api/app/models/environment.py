@@ -34,3 +34,6 @@ class Environment(Base):
     )
 
     team: Mapped["Team"] = relationship("Team", back_populates="environments")
+    application_deployments: Mapped[list["ApplicationDeployment"]] = relationship(
+        "ApplicationDeployment", back_populates="environment", cascade="all, delete-orphan"
+    )

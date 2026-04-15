@@ -5,6 +5,7 @@ from __future__ import annotations
 import click
 
 from devex.client import DevExClient
+from devex.commands.app import app
 from devex.commands.env import env
 from devex.commands.login import login, profile
 from devex.commands.members import members
@@ -59,6 +60,7 @@ cli.add_command(login)
 cli.add_command(profile)
 cli.add_command(team)
 cli.add_command(env)
+cli.add_command(app)
 
 # Nest members under team
 team.add_command(members)

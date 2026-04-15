@@ -9,6 +9,9 @@ import EnvironmentDetailPage from "@/pages/EnvironmentDetailPage";
 import SecurityPage from "@/pages/SecurityPage";
 import MetricsPage from "@/pages/MetricsPage";
 import CatalogPage from "@/pages/CatalogPage";
+import ApplicationsPage from "@/pages/ApplicationsPage";
+import ApplicationDetailPage from "@/pages/ApplicationDetailPage";
+import GlobalInventoryPage from "@/pages/GlobalInventoryPage";
 import AdminPage from "@/pages/AdminPage";
 import AuditLogPage from "@/pages/AuditLogPage";
 import "./App.css";
@@ -35,8 +38,14 @@ export default function App() {
               path="environments/:tier/metrics"
               element={<MetricsPage />}
             />
+            <Route path="applications" element={<ApplicationsPage />} />
+            <Route
+              path="applications/:name"
+              element={<ApplicationDetailPage />}
+            />
           </Route>
           <Route path="/teams/:slug/audit" element={<AuditLogPage />} />
+          <Route path="/applications" element={<GlobalInventoryPage />} />
           <Route path="/catalog" element={<CatalogPage />} />
           <Route path="/admin" element={<AdminPage />} />
           <Route path="/audit" element={<AuditLogPage />} />

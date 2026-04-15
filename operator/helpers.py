@@ -242,10 +242,10 @@ def build_network_policy(
 def _cluster_role_for_member_role(role: str) -> str:
     """Map a team member role to a ClusterRole name."""
     if role in ("owner", "admin"):
-        return "admin"
+        return "devexforge-namespace-admin"
     if role == "developer":
-        return "edit"
-    return "view"
+        return "devexforge-namespace-viewer"
+    return "devexforge-namespace-viewer"
 
 
 def build_role_binding(

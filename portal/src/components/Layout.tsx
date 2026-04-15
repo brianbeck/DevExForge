@@ -26,6 +26,15 @@ export default function Layout() {
             Teams
           </NavLink>
           <NavLink
+            to="/applications"
+            className={({ isActive }) =>
+              `nav-link${isActive ? " active" : ""}`
+            }
+          >
+            <span className="nav-icon">&#9632;</span>
+            Applications
+          </NavLink>
+          <NavLink
             to="/catalog"
             className={({ isActive }) =>
               `nav-link${isActive ? " active" : ""}`

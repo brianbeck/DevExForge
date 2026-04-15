@@ -24,6 +24,10 @@ _mock_k8s_instance.cluster_for_tier.side_effect = lambda tier: {
     "staging": "beck-stage",
     "production": "beck-prod",
 }.get(tier, "beck-stage")
+_mock_k8s_instance.create_argo_application.side_effect = lambda cluster, ns, body: body
+_mock_k8s_instance.list_argo_applications.return_value = []
+_mock_k8s_instance.delete_argo_application.return_value = None
+_mock_k8s_instance.get_argo_application_health.return_value = None
 _mock_k8s_class.return_value = _mock_k8s_instance
 
 patch("app.services.k8s_service.K8sService", _mock_k8s_class).start()
@@ -46,6 +50,33 @@ def _compile_jsonb_sqlite(type_, compiler, **kw):
 @compiles(PG_UUID, "sqlite")
 def _compile_uuid_sqlite(type_, compiler, **kw):
     return "CHAR(32)"
+
+
+# PG_UUID's bind_processor assumes values are uuid.UUID instances and calls
+# ``value.hex``. Production code sometimes passes string UUIDs (e.g. the
+# refresh flow stringifies the id). Override bind_processor to coerce strings.
+import uuid as _uuid  # noqa: E402
+
+_original_pg_uuid_bind_processor = PG_UUID.bind_processor
+
+
+def _tolerant_bind_processor(self, dialect):
+    inner = _original_pg_uuid_bind_processor(self, dialect)
+
+    def process(value):
+        if isinstance(value, str):
+            try:
+                value = _uuid.UUID(value)
+            except (ValueError, TypeError):
+                return value
+        if inner is None:
+            return value
+        return inner(value)
+
+    return process
+
+
+PG_UUID.bind_processor = _tolerant_bind_processor
 
 
 # SQLite only auto-generates values for INTEGER (not BIGINT) primary keys.
@@ -148,6 +179,10 @@ def _setup_overrides(engine, user: CurrentUser):
         "staging": "beck-stage",
         "production": "beck-prod",
     }.get(tier, "beck-stage")
+    mock_k8s.create_argo_application.side_effect = lambda cluster, ns, body: body
+    mock_k8s.list_argo_applications.return_value = []
+    mock_k8s.delete_argo_application.return_value = None
+    mock_k8s.get_argo_application_health.return_value = None
 
     original_k8s = k8s_mod.k8s_service
     k8s_mod.k8s_service = mock_k8s
@@ -170,6 +205,93 @@ def _teardown_overrides(original_k8s):
 
     app.dependency_overrides.clear()
     k8s_mod.k8s_service = original_k8s
+
+
+@pytest.fixture(autouse=True)
+def _install_k8s_mock_everywhere():
+    """Swap the real ``k8s_service`` binding for a MagicMock in every module
+    that imported it at load time. Without this, services that did
+    ``from app.services.k8s_service import k8s_service`` would still reference
+    the real ``K8sService`` instance created during module import, and tests
+    would hit ``RuntimeError: No Kubernetes client configured``.
+    """
+    import sys
+    mk = _mock_k8s_instance
+
+    # Reset and reinstall defaults before each test
+    mk.reset_mock()
+    mk.apply_team_crd.return_value = {}
+    mk.delete_team_crd.return_value = None
+    mk.apply_environment_crd.return_value = {}
+    mk.delete_environment_crd.return_value = None
+    mk.cluster_for_tier.side_effect = lambda tier: {
+        "dev": "beck-stage",
+        "staging": "beck-stage",
+        "production": "beck-prod",
+    }.get(tier, "beck-stage")
+    mk.create_argo_application.side_effect = lambda cluster, ns, body: body
+    mk.list_argo_applications.return_value = []
+    mk.list_argo_applications.side_effect = None
+    mk.delete_argo_application.return_value = None
+    mk.delete_argo_application.side_effect = None
+    mk.get_argo_application_health.return_value = None
+    mk.get_argo_application_health.side_effect = None
+
+    originals: dict[str, object] = {}
+    for mod_name, mod in list(sys.modules.items()):
+        if mod is None:
+            continue
+        if not mod_name.startswith("app."):
+            continue
+        if getattr(mod, "k8s_service", None) is None:
+            continue
+        # Only swap bindings that came from app.services.k8s_service
+        if mod_name == "app.services.k8s_service":
+            continue
+        originals[mod_name] = mod.k8s_service
+        mod.k8s_service = mk
+    # Also the canonical module
+    import app.services.k8s_service as k_mod
+    originals["app.services.k8s_service"] = k_mod.k8s_service
+    k_mod.k8s_service = mk
+
+    yield mk
+
+    for mod_name, orig in originals.items():
+        mod = sys.modules.get(mod_name)
+        if mod is not None:
+            mod.k8s_service = orig
+
+
+@pytest.fixture
+def mock_k8s():
+    """Access to the shared K8sService mock used by all services.
+
+    Resets call history and restores default return values on each test so
+    tests can freely assert on calls and override return values without
+    polluting other tests.
+    """
+    mk = _mock_k8s_instance
+    mk.reset_mock()
+    # Restore defaults (reset_mock clears side_effect/return_value if we asked,
+    # but we want to re-establish them regardless).
+    mk.apply_team_crd.return_value = {}
+    mk.delete_team_crd.return_value = None
+    mk.apply_environment_crd.return_value = {}
+    mk.delete_environment_crd.return_value = None
+    mk.cluster_for_tier.side_effect = lambda tier: {
+        "dev": "beck-stage",
+        "staging": "beck-stage",
+        "production": "beck-prod",
+    }.get(tier, "beck-stage")
+    mk.create_argo_application.side_effect = lambda cluster, ns, body: body
+    mk.list_argo_applications.return_value = []
+    mk.list_argo_applications.side_effect = None
+    mk.delete_argo_application.return_value = None
+    mk.delete_argo_application.side_effect = None
+    mk.get_argo_application_health.return_value = None
+    mk.get_argo_application_health.side_effect = None
+    yield mk
 
 
 @pytest_asyncio.fixture

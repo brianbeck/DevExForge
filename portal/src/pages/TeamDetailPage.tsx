@@ -137,6 +137,12 @@ export default function TeamDetailPage() {
         >
           Environments
         </NavLink>
+        <NavLink
+          to={`/teams/${slug}/applications`}
+          className={({ isActive }) => `tab${isActive ? " active" : ""}`}
+        >
+          Applications
+        </NavLink>
       </div>
 
       {isRootPath ? (
