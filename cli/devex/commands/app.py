@@ -21,6 +21,7 @@ def app() -> None:
 @click.option("--repo", "repo_url", default=None, help="Git repository URL.")
 @click.option("--chart-path", default=None, help="Helm chart path within repo (e.g. deploy/helm).")
 @click.option("--chart-repo", "chart_repo_url", default=None, help="Helm chart repo URL (if different from repo).")
+@click.option("--image-repo", "image_repo", default=None, help="Container image repository (e.g. ghcr.io/org/app).")
 @click.option("--owner", "owner_email", required=True, help="Owner email for notifications.")
 @click.option(
     "--strategy",
@@ -38,6 +39,7 @@ def app_register(
     repo_url: str | None,
     chart_path: str | None,
     chart_repo_url: str | None,
+    image_repo: str | None,
     owner_email: str,
     strategy: str,
 ) -> None:
@@ -56,6 +58,8 @@ def app_register(
         payload["chartPath"] = chart_path
     if chart_repo_url:
         payload["chartRepoUrl"] = chart_repo_url
+    if image_repo:
+        payload["imageRepo"] = image_repo
     result = client.post(f"/teams/{team}/applications", payload)
     print_success(f"Application '{result.get('name', name)}' registered for team '{team}'.")
 

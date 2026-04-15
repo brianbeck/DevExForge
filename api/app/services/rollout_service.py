@@ -94,12 +94,11 @@ def build_rollout_manifest(
 ) -> dict:
     """Build an argoproj.io/v1alpha1 Rollout CR for the given application.
 
-    NOTE: The Application model stores a source/chart repo URL but not the
-    container image repository. Callers SHOULD pass an explicit `image`
-    argument. As a fallback we derive it from `app.repo_url:image_tag`, which
-    is only a sensible default when the source repo URL happens to coincide
-    with the container image repository. This assumption will need to be
-    revisited once Application gains an explicit image_repo field.
+    The container image repository is resolved in priority order:
+      1. explicit `image` argument
+      2. `app.image_repo` (set at registration time)
+      3. `app.repo_url` (legacy fallback — only correct when the source repo
+         URL happens to match the image repo)
     """
     if strategy == "rolling":
         raise ValueError(
@@ -109,7 +108,13 @@ def build_rollout_manifest(
     if strategy not in ("bluegreen", "canary"):
         raise ValueError(f"Unsupported rollout strategy: {strategy}")
 
-    container_image = image or f"{app.repo_url}:{image_tag}"
+    image_repo = image or getattr(app, "image_repo", None) or app.repo_url
+    if not image_repo:
+        raise ValueError(
+            f"Application {app.name} has no image repository configured; "
+            "set image_repo on registration or pass an explicit image."
+        )
+    container_image = f"{image_repo}:{image_tag}" if ":" not in image_repo else image_repo
 
     labels = {
         "app": app.name,

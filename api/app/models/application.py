@@ -27,6 +27,7 @@ class Application(Base):
     repo_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
     chart_path: Mapped[str | None] = mapped_column(String(256), nullable=True)
     chart_repo_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    image_repo: Mapped[str | None] = mapped_column(String(512), nullable=True)
     owner_email: Mapped[str] = mapped_column(String(256), nullable=False)
     default_strategy: Mapped[str] = mapped_column(String(32), nullable=False, default="rolling")
     canary_steps: Mapped[dict | None] = mapped_column(JSONB, nullable=True)

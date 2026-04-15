@@ -97,6 +97,7 @@ export default function ApplicationsPage() {
       if (formData.repoUrl) payload.repoUrl = formData.repoUrl;
       if (formData.chartPath) payload.chartPath = formData.chartPath;
       if (formData.chartRepoUrl) payload.chartRepoUrl = formData.chartRepoUrl;
+      if (formData.imageRepo) payload.imageRepo = formData.imageRepo;
       await createApplication(slug, payload);
       setShowForm(false);
       setFormData({
@@ -204,6 +205,20 @@ export default function ApplicationsPage() {
                 value={formData.chartPath || ""}
                 onChange={(e) =>
                   setFormData({ ...formData, chartPath: e.target.value })
+                }
+              />
+            </div>
+          </div>
+          <div className="form-row">
+            <div className="form-group">
+              <label htmlFor="app-imageRepo">Image Repository</label>
+              <input
+                id="app-imageRepo"
+                type="text"
+                placeholder="ghcr.io/org/app"
+                value={formData.imageRepo || ""}
+                onChange={(e) =>
+                  setFormData({ ...formData, imageRepo: e.target.value })
                 }
               />
             </div>

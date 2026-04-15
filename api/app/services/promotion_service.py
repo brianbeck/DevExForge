@@ -409,6 +409,46 @@ async def execute_request(
     if rollback_revision:
         request.rollback_revision = rollback_revision
 
+    strategy = request.strategy or "rolling"
+    value_overrides = dict(request.value_overrides or {})
+
+    # For bluegreen/canary on production, verify Argo Rollouts is available on
+    # the target cluster and signal the strategy to the user's Helm chart via
+    # value overrides. The chart is expected to render a Rollout CR (instead of
+    # a Deployment) when `deploymentStrategy` is set to bluegreen or canary.
+    if strategy in ("bluegreen", "canary"):
+        if target_tier != "production":
+            raise ValueError(
+                f"Strategy '{strategy}' is only supported for production targets"
+            )
+        try:
+            from app.services.rollout_service import check_rollouts_available
+
+            available = await check_rollouts_available(cluster)
+            if not available:
+                logger.warning(
+                    "Argo Rollouts not installed on cluster '%s'; falling back "
+                    "to rolling for promotion %s",
+                    cluster, request.id,
+                )
+                strategy = "rolling"
+        except ImportError:
+            logger.warning(
+                "rollout_service unavailable; falling back to rolling strategy"
+            )
+            strategy = "rolling"
+        except Exception as e:  # noqa: BLE001
+            logger.warning(
+                "Rollout availability check failed (%s); falling back to rolling", e,
+            )
+            strategy = "rolling"
+
+    if strategy in ("bluegreen", "canary"):
+        value_overrides["deploymentStrategy"] = strategy
+        if strategy == "canary" and app.canary_steps:
+            import json as _json
+            value_overrides["canarySteps"] = _json.dumps(app.canary_steps)
+
     # Build the updated Argo CD Application body.
     body = application_service._build_argocd_app_body(
         app=app,
@@ -416,34 +456,9 @@ async def execute_request(
         cluster=cluster,
         image_tag=request.image_tag,
         chart_version=request.chart_version,
-        value_overrides=request.value_overrides,
+        value_overrides=value_overrides,
     )
     new_argocd_app_name = body["metadata"]["name"]
-
-    strategy = request.strategy or "rolling"
-    if strategy in ("bluegreen", "canary") and target_tier == "production":
-        try:
-            from app.services.rollout_service import (  # type: ignore
-                RolloutsNotAvailable,
-                build_rollout_manifest,
-            )
-
-            # TODO(Phase 2b): integrate rollout manifest into Argo app body or
-            # apply it as a sidecar resource once rollout_service stabilizes.
-            build_rollout_manifest(app, target_env, request)
-        except ImportError:
-            # TODO(Phase 2b): rollout_service not yet available.
-            logger.warning(
-                "rollout_service not available; falling back to rolling strategy"
-            )
-            strategy = "rolling"
-        except Exception as e:
-            # RolloutsNotAvailable or other — degrade to rolling.
-            logger.warning(
-                "Rollout manifest build failed (%s); falling back to rolling",
-                e,
-            )
-            strategy = "rolling"
 
     k8s_service.create_argo_application(cluster, "argocd", body)
 
@@ -511,7 +526,7 @@ async def rollback_request(
             f"Cannot rollback request in status '{request.status}'"
         )
 
-    await _perform_rollback(request, reason, actor=user_email)
+    await _perform_rollback(db, request, reason, actor=user_email)
 
     request.status = "rolled_back"
     await db.flush()
@@ -538,7 +553,7 @@ async def auto_rollback(
             f"Cannot auto-rollback request in status '{request.status}'"
         )
 
-    await _perform_rollback(request, reason, actor="system")
+    await _perform_rollback(db, request, reason, actor="system")
 
     request.status = "rolled_back"
     await db.flush()
@@ -555,12 +570,10 @@ async def auto_rollback(
 
 
 async def _perform_rollback(
-    request: PromotionRequest, reason: str, actor: str
+    db: AsyncSession, request: PromotionRequest, reason: str, actor: str
 ) -> None:
-    """Attempt to roll back the Argo CD Application to rollback_revision.
-
-    k8s_service does not yet expose a first-class sync/rollback helper; log the
-    intent when unavailable so the sync loop / operators can follow up.
+    """Roll back the Argo CD Application to `rollback_revision` by triggering
+    a sync to the captured revision via `k8s_service.sync_argo_application_to_revision`.
     """
     if not request.rollback_revision:
         logger.warning(
@@ -572,16 +585,54 @@ async def _perform_rollback(
         )
         return
 
-    # TODO(Phase 2b): k8s_service needs a rollback/sync-to-revision helper.
-    # For now we log the intent; sync loop (task #50) will reconcile.
-    logger.warning(
-        "Rollback intent for promotion %s to revision %s (reason=%s, actor=%s) "
-        "-- k8s_service rollback helper not yet implemented",
-        request.id,
-        request.rollback_revision,
-        reason,
-        actor,
+    # Look up the current deployment for the target environment so we know
+    # which Argo CD Application to sync and which cluster it lives in.
+    from sqlalchemy import select as _select
+    from app.models.application import Application, ApplicationDeployment
+    from app.models.environment import Environment
+
+    stmt = (
+        _select(ApplicationDeployment)
+        .where(
+            ApplicationDeployment.application_id == request.application_id,
+            ApplicationDeployment.environment_id == request.to_environment_id,
+        )
+        .options(selectinload(ApplicationDeployment.environment))
     )
+    result = await db.execute(stmt)
+    deployment = result.scalar_one_or_none()
+    if deployment is None or deployment.environment is None:
+        logger.warning(
+            "Rollback for promotion %s: no deployment row for target env; "
+            "skipping k8s sync",
+            request.id,
+        )
+        return
+
+    env = deployment.environment
+    tier = env.tier
+    cluster = k8s_service.cluster_for_tier(tier)
+    argocd_app_name = deployment.argocd_app_name
+
+    try:
+        # Argo CD Applications live in the argocd namespace on the target cluster.
+        k8s_service.sync_argo_application_to_revision(
+            cluster=cluster,
+            namespace="argocd",
+            app_name=argocd_app_name,
+            revision=request.rollback_revision,
+        )
+        logger.info(
+            "Rollback sync triggered for promotion %s: app=%s revision=%s "
+            "reason=%s actor=%s",
+            request.id, argocd_app_name, request.rollback_revision, reason, actor,
+        )
+    except Exception as e:  # noqa: BLE001
+        logger.error(
+            "Rollback sync failed for promotion %s: %s", request.id, e
+        )
+        # Do not re-raise — the status transition still happens so the sync
+        # loop can surface the failed state.
 
 
 async def list_requests(

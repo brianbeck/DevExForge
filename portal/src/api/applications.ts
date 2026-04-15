@@ -9,6 +9,7 @@ export interface Application {
   repoUrl: string | null;
   chartPath: string | null;
   chartRepoUrl: string | null;
+  imageRepo: string | null;
   ownerEmail: string;
   defaultStrategy: "rolling" | "bluegreen" | "canary";
   canarySteps: unknown | null;
@@ -45,6 +46,7 @@ export interface ApplicationCreate {
   repoUrl?: string;
   chartPath?: string;
   chartRepoUrl?: string;
+  imageRepo?: string;
   ownerEmail: string;
   defaultStrategy?: "rolling" | "bluegreen" | "canary";
   metadata?: Record<string, unknown>;
@@ -56,6 +58,7 @@ export interface ApplicationUpdate {
   repoUrl?: string;
   chartPath?: string;
   chartRepoUrl?: string;
+  imageRepo?: string;
   ownerEmail?: string;
   defaultStrategy?: "rolling" | "bluegreen" | "canary";
   metadata?: Record<string, unknown>;

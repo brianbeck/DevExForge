@@ -63,6 +63,7 @@ def _app_to_response(app: Application) -> ApplicationDetailResponse:
         repoUrl=app.repo_url,
         chartPath=app.chart_path,
         chartRepoUrl=app.chart_repo_url,
+        imageRepo=app.image_repo,
         ownerEmail=app.owner_email,
         defaultStrategy=app.default_strategy,
         canarySteps=app.canary_steps,

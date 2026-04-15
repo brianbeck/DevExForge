@@ -99,6 +99,7 @@ async def create_application(
         repo_url=data.repo_url,
         chart_path=data.chart_path,
         chart_repo_url=data.chart_repo_url,
+        image_repo=data.image_repo,
         owner_email=data.owner_email,
         default_strategy=data.default_strategy,
         app_metadata=data.metadata,
@@ -167,6 +168,8 @@ async def update_application(
         app.chart_path = data.chart_path
     if data.chart_repo_url is not None:
         app.chart_repo_url = data.chart_repo_url
+    if data.image_repo is not None:
+        app.image_repo = data.image_repo
     if data.owner_email is not None:
         app.owner_email = data.owner_email
     if data.default_strategy is not None:

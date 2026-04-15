@@ -207,6 +207,51 @@ class K8sService:
                 return []
             raise
 
+    def sync_argo_application_to_revision(
+        self,
+        cluster: str,
+        namespace: str,
+        app_name: str,
+        revision: str,
+    ) -> dict:
+        """Trigger Argo CD to sync an Application to a specific revision.
+
+        Patches the Application CR's `operation` field, which Argo CD's
+        application controller picks up and executes. This is the canonical
+        rollback mechanism — equivalent to `argocd app sync <name> --revision <rev>`.
+        """
+        api = self._get_api(cluster)
+        patch = {
+            "operation": {
+                "sync": {
+                    "revision": revision,
+                    "prune": True,
+                    "syncStrategy": {"apply": {"force": False}},
+                },
+                "initiatedBy": {"username": "devexforge", "automated": True},
+            }
+        }
+        try:
+            result = api.patch_namespaced_custom_object(
+                group="argoproj.io",
+                version="v1alpha1",
+                namespace=namespace,
+                plural="applications",
+                name=app_name,
+                body=patch,
+            )
+            logger.info(
+                "Triggered sync of Argo CD Application '%s' to revision %s in %s/%s",
+                app_name, revision, cluster, namespace,
+            )
+            return result
+        except ApiException as e:
+            logger.error(
+                "Failed to sync Application '%s' to revision %s: %s",
+                app_name, revision, e,
+            )
+            raise
+
     def delete_argo_application(
         self,
         cluster: str,

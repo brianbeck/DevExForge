@@ -16,6 +16,7 @@ class ApplicationCreate(BaseModel):
     repo_url: str | None = Field(None, alias="repoUrl")
     chart_path: str | None = Field(None, alias="chartPath")
     chart_repo_url: str | None = Field(None, alias="chartRepoUrl")
+    image_repo: str | None = Field(None, alias="imageRepo")
     owner_email: str = Field(..., alias="ownerEmail")
     default_strategy: Strategy = Field("rolling", alias="defaultStrategy")
     metadata: dict | None = None
@@ -29,6 +30,7 @@ class ApplicationUpdate(BaseModel):
     repo_url: str | None = Field(None, alias="repoUrl")
     chart_path: str | None = Field(None, alias="chartPath")
     chart_repo_url: str | None = Field(None, alias="chartRepoUrl")
+    image_repo: str | None = Field(None, alias="imageRepo")
     owner_email: str | None = Field(None, alias="ownerEmail")
     default_strategy: Strategy | None = Field(None, alias="defaultStrategy")
     metadata: dict | None = None
@@ -45,6 +47,7 @@ class ApplicationResponse(BaseModel):
     repo_url: str | None = Field(None, alias="repoUrl")
     chart_path: str | None = Field(None, alias="chartPath")
     chart_repo_url: str | None = Field(None, alias="chartRepoUrl")
+    image_repo: str | None = Field(None, alias="imageRepo")
     owner_email: str = Field(..., alias="ownerEmail")
     default_strategy: str = Field(..., alias="defaultStrategy")
     canary_steps: dict | None = Field(None, alias="canarySteps")
