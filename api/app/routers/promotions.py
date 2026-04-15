@@ -102,9 +102,13 @@ def _base_fields(request: PromotionRequest) -> dict:
     canary_steps = None
     if request.canary_steps and isinstance(request.canary_steps, dict):
         canary_steps = request.canary_steps.get("steps")
+    app = request.application
+    team = app.team if app is not None else None
     return dict(
         id=request.id,
         applicationId=request.application_id,
+        applicationName=app.name if app is not None else None,
+        teamSlug=team.slug if team is not None else None,
         fromTier=request.source_tier,
         targetTier=request.target_tier,
         fromDeploymentId=request.from_deployment_id,

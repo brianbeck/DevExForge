@@ -85,6 +85,8 @@ class PromotionRequestCreate(BaseModel):
 class PromotionRequestResponse(BaseModel):
     id: UUID
     application_id: UUID = Field(..., alias="applicationId")
+    application_name: str | None = Field(None, alias="applicationName")
+    team_slug: str | None = Field(None, alias="teamSlug")
     from_tier: str | None = Field(None, alias="fromTier")
     target_tier: str = Field(..., alias="targetTier")
     from_deployment_id: UUID | None = Field(None, alias="fromDeploymentId")

@@ -164,16 +164,16 @@ export default function PromotionsPage() {
               <tr key={p.id}>
                 <td>
                   <span className="text-mono">
-                    {p.teamSlug}/{p.applicationName}
+                    {p.teamSlug ?? "—"}/{p.applicationName ?? "—"}
                   </span>
                 </td>
                 <td>
-                  {p.fromTier || "—"} → {p.toTier}
+                  {p.fromTier || "—"} → {p.targetTier}
                   <div className="inventory-meta">
-                    {p.fromVersion || "—"} → {p.toVersion}
+                    → {p.imageTag ?? "—"}
                   </div>
                 </td>
-                <td>{p.strategy}</td>
+                <td>{p.strategy ?? "rolling"}</td>
                 <td>
                   <span className={promotionStatusClass(p.status)}>
                     {p.status}

@@ -11,7 +11,8 @@ Portal/CLI -> API (PostgreSQL) -> Syncs CRDs to cluster -> Operator watches CRDs
 ```
 
 **Components:**
-- **API** (`api/`): FastAPI + PostgreSQL + Alembic, Keycloak JWT auth, tiered policy floors, multi-cluster CRD sync, application promotion
+- **API** (`api/`): FastAPI + PostgreSQL + Alembic, Keycloak JWT auth, tiered policy floors, multi-cluster CRD sync, application inventory, and gated promotion requests
+- The API maintains an application inventory (logical app + per-tier deployments) and gates promotions through a pluggable rule registry (platform-mandatory + team-defined). Blue-green and canary rollouts are driven via Argo Rollouts on the target cluster.
 - **Portal** (`portal/`): Vite + React + TypeScript with Keycloak auth
 - **Operator** (`operator/`): Kopf-based K8s operator that reconciles Team/Environment CRDs into namespaces, quotas, RBAC, NetworkPolicies, Gatekeeper constraints, and Argo CD AppProjects
 - **CLI** (`cli/`): Python CLI with Click and Rich for team/environment self-service
@@ -68,7 +69,7 @@ Configure your domain via the deploy repo values files. The default naming conve
 | `GET` | `.../environments/{tier}/resource-usage` | Quota usage | team member |
 | `GET` | `.../environments/{tier}/metrics` | Prometheus metrics | team member |
 | `GET` | `.../environments/{tier}/dashboards` | Grafana links | team member |
-| `POST` | `.../environments/{tier}/applications/{app}/promote` | Promote app | team admin |
+| `POST` | `.../environments/{tier}/applications/{app}/promote` | Promote app (legacy) | team admin |
 | `POST` | `.../environments/{tier}/deploy` | Deploy from catalog | team admin/developer |
 | `GET` | `/api/v1/catalog/templates` | List templates | authenticated |
 | `POST` | `/api/v1/catalog/templates` | Create template | platform admin |
@@ -78,6 +79,190 @@ Configure your domain via the deploy repo values files. The default naming conve
 | `POST` | `/api/v1/admin/policy-profiles` | Create profile | platform admin |
 | `GET` | `/api/v1/audit` | Platform audit log | platform admin |
 | `GET` | `/api/v1/teams/{slug}/audit` | Team audit log | team admin |
+
+### Application Inventory (Phase 1)
+
+| Method | Path | Description | Required Role |
+|--------|------|-------------|---------------|
+| `POST` | `/api/v1/teams/{slug}/applications` | Register application | team admin/developer |
+| `GET` | `/api/v1/teams/{slug}/applications` | List team applications | team admin/developer |
+| `GET` | `/api/v1/teams/{slug}/applications/inventory` | Team inventory grid | team admin/developer |
+| `GET` | `/api/v1/teams/{slug}/applications/{name}` | Get application | team admin/developer |
+| `PATCH` | `/api/v1/teams/{slug}/applications/{name}` | Update application | team admin |
+| `DELETE` | `/api/v1/teams/{slug}/applications/{name}` | Delete application | team admin |
+| `GET` | `.../applications/{name}/deployments` | List deployments | team admin/developer |
+| `GET` | `.../applications/{name}/history` | Deployment event history | team admin/developer |
+| `POST` | `.../applications/{name}/deploy` | Deploy to a tier | team admin/developer |
+| `POST` | `.../applications/{name}/refresh` | Refresh Argo CD status | team admin/developer |
+| `GET` | `/api/v1/applications` | List all applications | platform admin |
+| `GET` | `/api/v1/applications/inventory` | Global inventory grid | platform admin |
+
+### Promotion Requests (Phase 2)
+
+| Method | Path | Description | Required Role |
+|--------|------|-------------|---------------|
+| `POST` | `.../applications/{name}/promotion-requests` | Create promotion request | team admin/developer |
+| `GET` | `.../applications/{name}/promotion-requests` | List requests for app | team member |
+| `GET` | `/api/v1/promotion-requests` | List all requests | platform admin |
+| `GET` | `/api/v1/promotion-requests/{id}` | Get request + gate results | team member |
+| `POST` | `/api/v1/promotion-requests/{id}/approve` | Approve (satisfies manual_approval) | team member (role enforced by gate) |
+| `POST` | `/api/v1/promotion-requests/{id}/reject` | Reject with reason | team member |
+| `POST` | `/api/v1/promotion-requests/{id}/force` | Force past failing gates | platform admin |
+| `POST` | `/api/v1/promotion-requests/{id}/rollback` | Roll back a completed promotion | team admin |
+| `POST` | `/api/v1/promotion-requests/{id}/cancel` | Cancel pending request | requester or team admin |
+
+### Rollouts (Phase 2)
+
+| Method | Path | Description | Required Role |
+|--------|------|-------------|---------------|
+| `GET` | `.../applications/{name}/rollout` | Rollout status (phase, step, revisions) | team admin/developer |
+| `POST` | `.../applications/{name}/rollout/promote` | Promote paused rollout | team admin |
+| `POST` | `.../applications/{name}/rollout/pause` | Pause rollout | team admin |
+| `POST` | `.../applications/{name}/rollout/abort` | Abort rollout | team admin |
+
+### Promotion Gates (Phase 2)
+
+| Method | Path | Description | Required Role |
+|--------|------|-------------|---------------|
+| `GET` | `/api/v1/admin/promotion-gates` | List all gates (filter by scope/tier) | platform admin |
+| `POST` | `/api/v1/admin/promotion-gates` | Create platform gate | platform admin |
+| `DELETE` | `/api/v1/admin/promotion-gates/{id}` | Delete any gate | platform admin |
+| `GET` | `.../applications/{name}/gates` | List applicable gates | team admin/developer |
+| `POST` | `.../applications/{name}/gates` | Create team gate | team admin |
+| `DELETE` | `.../applications/{name}/gates/{id}` | Delete team gate | team admin |
+
+## Application Inventory
+
+Applications are first-class: one logical application owns many deployments (one per environment tier) and is the unit that gets promoted, rolled back, and audited.
+
+| Concept | Description |
+|---------|-------------|
+| Application | Logical record: name, repo URL, chart path, image repo, default strategy, owner |
+| Deployment | Per-tier projection: image tag, chart version, git SHA, health, sync, strategy, timestamps |
+| Inventory grid | Cross-tier view: one row per app, one column per tier (dev/staging/production), cells show image tag + health + who deployed |
+
+Applications must be **explicitly registered** before they can be deployed. There is no auto-discovery of existing Argo CD Applications -- the tradeoff is simpler ownership tracking and deterministic audit. Catalog deploys auto-register the application on first use so casual users never hit the register step by hand.
+
+**Register an application:**
+
+```bash
+devex app register \
+  --team payments \
+  --name payments-api \
+  --repo https://github.com/company/payments-api \
+  --chart-path deploy/helm \
+  --image-repo ghcr.io/company/payments-api \
+  --strategy rolling
+```
+
+**Portal:** Teams -> Payments -> Applications -> Register. The team inventory page is `Applications -> Inventory`; the global inventory is under the admin area.
+
+## Promotion Requests and Gates
+
+A promotion no longer fires synchronously. It creates a `PromotionRequest` that walks a state machine, running gates at each transition:
+
+```
+pending_gates -> pending_approval -> approved -> executing -> completed
+                                                           \-> failed
+                                                            \-> rolled_back
+             \-> rejected
+             \-> cancelled
+```
+
+On `create_promotion_request` the API evaluates all applicable gates. Blocking failures move the request to `rejected` (or stay `pending_gates` if the caller retries). A pending `manual_approval` gate parks the request in `pending_approval` until an authorized user approves; approval flips it to `approved`, then the executor moves it to `executing` and finally `completed`. Auto-rollback kicks in if health stays `Degraded` past the watchdog window (default 10 min), transitioning the request to `rolled_back`.
+
+### Gate Types
+
+Eight built-in gate types live in the registry. Team admins can add stricter gates; they cannot relax a platform gate of the same type (platform always wins on de-duplication).
+
+| Gate Type | Config | Checks |
+|-----------|--------|--------|
+| `deployed_in_prior_env` | *(none)* | Prior tier has a Healthy deployment of the same app |
+| `health_passing` | *(none)* | Source deployment `health_status == Healthy` |
+| `min_time_in_prior_env` | `{hours: int}` | Source deployment has soaked >= N hours |
+| `no_critical_cves` | *(none)* | Zero critical CVEs in source namespace (Trivy) |
+| `max_high_cves` | `{max: int}` | High CVE count <= max in source namespace |
+| `compliance_score_min` | `{min: int}` | Computed compliance score (violations/CVEs/events) >= min |
+| `manual_approval` | `{required_role: str, count: int}` | Cleared by approval flow, not evaluation |
+| `github_tag_exists` | `{repo?: str}` | The image tag exists as a tag in the upstream GitHub repo |
+
+### Platform Mandatory Gates
+
+Seeded by migration `006_add_promotion_governance.py`:
+
+| Tier | Gates |
+|------|-------|
+| dev | *(none -- free deploys)* |
+| staging | `deployed_in_prior_env`, `health_passing` |
+| production | `deployed_in_prior_env`, `health_passing`, `min_time_in_prior_env(24h)`, `no_critical_cves`, `compliance_score_min(80)`, `manual_approval(admin, count=1)` |
+
+Team admins can add extra gates (e.g. a team-specific `max_high_cves: 5` on staging, or a second `manual_approval` from a team lead). Deleting a platform gate via a team endpoint returns 403.
+
+### Force Push and Rollback
+
+Platform admins can force a request past a failing gate via `POST /promotion-requests/{id}/force` with a mandatory `reason` field. The reason is persisted on the request (`force_reason`, `forced_by`) and written to the audit log. Rollbacks (`POST .../rollback`) also require a reason and are restricted to team admins.
+
+## Blue-Green and Canary Deployments
+
+Non-rolling strategies require **Argo Rollouts** on the target cluster (already installed by PlatformForge). If Argo Rollouts is missing, the API falls back to a plain rolling update and logs a warning on the promotion request. `bluegreen` and `canary` are **production-only** -- requesting them against dev/staging is rejected at request creation.
+
+### Chart Contract
+
+When a promotion executes with `strategy=bluegreen|canary`, the API overrides the user's Helm values with:
+
+| Value | Type | Set When |
+|-------|------|----------|
+| `deploymentStrategy` | string (`bluegreen` or `canary`) | strategy is non-rolling |
+| `canarySteps` | JSON-encoded string of step list | strategy is `canary` |
+
+The chart **MUST** conditionally render an `argoproj.io/v1alpha1/Rollout` (instead of a plain `Deployment`) when `deploymentStrategy` is set. Sketch:
+
+```yaml
+{{- if .Values.deploymentStrategy }}
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
+metadata:
+  name: {{ .Release.Name }}
+spec:
+  replicas: {{ .Values.replicas }}
+  selector:
+    matchLabels: { app: {{ .Release.Name }} }
+  template: {{- /* same pod spec as the Deployment */ -}}
+  strategy:
+    {{- if eq .Values.deploymentStrategy "bluegreen" }}
+    blueGreen:
+      activeService: {{ .Release.Name }}
+      previewService: {{ .Release.Name }}-preview
+      autoPromotionEnabled: false
+    {{- else if eq .Values.deploymentStrategy "canary" }}
+    canary:
+      steps: {{ .Values.canarySteps | fromJson | toYaml | nindent 8 }}
+    {{- end }}
+{{- else }}
+apiVersion: apps/v1
+kind: Deployment
+# ... normal deployment ...
+{{- end }}
+```
+
+### No Traffic Router
+
+We deliberately do **not** use an Argo Rollouts traffic router plugin. This has two consequences:
+
+- **Blue-green** works via Service selector swap. The preview Service receives the new version for analysis; on promote, the active Service selector flips to the new ReplicaSet (instant cutover).
+- **Canary** works by replica count only. A canary step of "1 canary, 4 stable" creates 1 new-version pod alongside 4 stable pods; the Service round-robins across all 5. Actual traffic share is approximate (1/5 per request).
+- **Weighted percentage traffic shifting is not supported.** A 10% canary step cannot send "10% of requests" -- it can only adjust replica counts. Real weighted routing is deferred until a Gateway API migration.
+
+### Driving a Rollout
+
+After a blue-green or canary promotion reaches `executing`, use the rollout endpoints (or the CLI `devex rollout` commands) to inspect and advance it:
+
+```bash
+devex rollout status payments payments-api --tier production
+devex rollout promote payments payments-api --tier production   # clear pause
+devex rollout pause   payments payments-api --tier production
+devex rollout abort   payments payments-api --tier production
+```
 
 ## Roles and Access
 
@@ -290,6 +475,15 @@ devex env list backend-team
 devex env status backend-team dev
 ```
 
+**Phase 1 / Phase 2 command groups:**
+
+| Group | Purpose |
+|-------|---------|
+| `devex app` | Register, list, get, update, delete, deploy, refresh applications; view inventory grid |
+| `devex promote` | Create, list, get, approve, reject, force, rollback, cancel promotion requests |
+| `devex rollout` | Status, promote, pause, abort Argo Rollouts (blue-green/canary) |
+| `devex gates` | List / create / delete promotion gates (team and platform) |
+
 ## Stopping the Environment
 
 ```bash
@@ -304,7 +498,7 @@ source .venv/bin/activate
 cd api && python -m pytest tests/ -v
 ```
 
-35 tests covering team CRUD, member management, environment lifecycle, policy floor enforcement, and health endpoints. No external dependencies required.
+103 tests covering team CRUD, member management, environment lifecycle, policy floor enforcement, and health endpoints (62 Phase 1 carryover) plus gate evaluation for all 8 gate types, the promotion request state machine, rollout manifest generation for bluegreen/canary, and end-to-end router integration for applications, promotion requests, gates, and rollouts (41 Phase 2). No external dependencies required.
 
 ## CI/CD Pipeline
 
@@ -438,78 +632,77 @@ devex -k env create payments-team --tier dev
 
 The operator creates namespace `payments-team-dev` with resource quotas, network policies, RBAC (only Payments team members can deploy), and Gatekeeper constraints.
 
-### Step 4: Deploy the application
+### Step 4: Register the application
 
-**Option A -- Service Catalog (portal):**
-1. Catalog -> pick a template (e.g., "Python FastAPI")
-2. Select team and environment
-3. Set app name, customize values (image, replicas, env vars)
-4. Click Deploy
+Register the logical application once. Subsequent deploys and promotions reference it by `team/name`.
 
-**Option B -- Argo CD directly:**
 ```bash
-argocd app create payments-api \
-  --project payments-team-dev \
-  --repo https://github.com/company/payments-api.git \
-  --path deploy/helm \
-  --dest-server https://kubernetes.default.svc \
-  --dest-namespace payments-team-dev \
-  --sync-policy automated \
-  --server argocd-stage.<domain> --grpc-web --insecure
+devex -k app register \
+  --team payments-team \
+  --name payments-api \
+  --repo https://github.com/company/payments-api \
+  --chart-path deploy/helm \
+  --image-repo ghcr.io/company/payments-api \
+  --strategy rolling
 ```
 
-### Step 5: Validate in dev
+**Portal:** Teams -> Payments Team -> Applications -> Register. Service Catalog deploys auto-register on first use.
 
-Check pods are running:
+### Step 5: Deploy to dev
+
+```bash
+devex -k app deploy payments-team payments-api --tier dev --image-tag v1.0.0
+```
+
+The API creates/updates the Argo CD Application in `payments-team-dev` and records a new `ApplicationDeployment` row. Check the team inventory grid in the portal (`Applications -> Inventory`) to see the dev cell populate.
+
+Validate pods and compliance:
 ```bash
 kubectl --context beck-stage-admin@beck-stage -n payments-team-dev get pods
+devex -k app refresh payments-team payments-api
 ```
 
-Check security compliance (portal: Security Posture page, or CLI):
+### Step 6: Request promotion to staging
+
+Create the staging environment (`devex -k env create payments-team --tier staging`) and then request a promotion:
+
 ```bash
-curl -sk -H "Authorization: Bearer $TOKEN" \
-  https://devexforge-api-stage.<domain>/api/v1/teams/payments-team/environments/dev/compliance-summary
+devex -k promote request payments-team payments-api --to staging
 ```
 
-### Step 6: Promote to staging
+Gates evaluated for staging: `deployed_in_prior_env` and `health_passing`. If the dev deployment is Healthy, the request goes straight to `approved` and executes. Watch the request:
 
-Create the staging environment:
 ```bash
-devex -k env create payments-team --tier staging
+devex -k promote get <request-id>
 ```
-
-Promote the application (portal: Applications -> Promote, or API):
-```bash
-curl -sk -X POST \
-  "https://devexforge-api-stage.<domain>/api/v1/teams/payments-team/environments/dev/applications/payments-api/promote" \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"targetTier": "staging"}'
-```
-
-Staging enforces stricter policies (requireNonRoot=true, maxCriticalCVEs=0). If your app runs as root or has critical CVEs, Gatekeeper will block deployment.
 
 ### Step 7: Validate in staging
 
-Review the Security Posture page for the staging environment. Fix any violations before proceeding to production.
+Review the Security Posture page for `payments-team-staging`. Fix any violations before requesting production promotion -- production gates will block the request otherwise.
 
-### Step 8: Promote to production
+### Step 8: Request promotion to production
 
-Create the production environment:
 ```bash
 devex -k env create payments-team --tier production
+devex -k promote request payments-team payments-api --to production \
+  --value-override replicas=3
 ```
 
-Promote from staging to production with value overrides for production settings:
+Production gates run: `deployed_in_prior_env`, `health_passing`, `min_time_in_prior_env(24h)`, `no_critical_cves`, `compliance_score_min(80)`, `manual_approval(admin)`. Assuming the non-approval gates pass, the request parks in `pending_approval`:
+
 ```bash
-curl -sk -X POST \
-  "https://devexforge-api-stage.<domain>/api/v1/teams/payments-team/environments/staging/applications/payments-api/promote" \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"targetTier": "production", "valueOverrides": {"replicas": "3"}}'
+devex -k promote approve <request-id>
 ```
 
-Production enforces the strictest policies (requireReadOnlyRoot=true, maxHighCVEs=0).
+For blue-green or canary strategies, monitor the rollout as it executes:
+```bash
+devex -k rollout status payments-team payments-api --tier production
+```
+
+For emergencies, roll back:
+```bash
+devex -k promote rollback <request-id> --reason "p99 latency regression"
+```
 
 ### Step 9: Monitor
 

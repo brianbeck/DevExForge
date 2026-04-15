@@ -152,8 +152,8 @@ export default function ApplicationDetailPage() {
     setPromoting(true);
     try {
       const result = await createPromotionRequest(slug, name, {
-        toTier,
-        toVersion: promoteForm.imageTag,
+        targetTier: toTier,
+        imageTag: promoteForm.imageTag,
         strategy: promoteForm.strategy,
         notes: promoteForm.notes || undefined,
       });

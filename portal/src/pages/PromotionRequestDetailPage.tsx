@@ -159,18 +159,16 @@ export default function PromotionRequestDetailPage() {
         <dl className="detail-grid">
           <dt>Application</dt>
           <dd className="text-mono">
-            {promo.teamSlug}/{promo.applicationName}
+            {promo.teamSlug ?? "—"}/{promo.applicationName ?? "—"}
           </dd>
           <dt>From → To</dt>
           <dd>
-            {promo.fromTier || "—"} → {promo.toTier}
+            {promo.fromTier || "—"} → {promo.targetTier}
           </dd>
           <dt>Version</dt>
-          <dd className="text-mono">
-            {promo.fromVersion || "—"} → {promo.toVersion}
-          </dd>
+          <dd className="text-mono">→ {promo.imageTag ?? "—"}</dd>
           <dt>Strategy</dt>
-          <dd>{promo.strategy}</dd>
+          <dd>{promo.strategy ?? "rolling"}</dd>
           <dt>Status</dt>
           <dd>
             <span className={promotionStatusClass(promo.status)}>
@@ -181,10 +179,10 @@ export default function PromotionRequestDetailPage() {
           <dd>{promo.requestedBy}</dd>
           <dt>Requested At</dt>
           <dd>{new Date(promo.requestedAt).toLocaleString()}</dd>
-          {promo.approvedBy && (
+          {promo.approverEmail && (
             <>
               <dt>Approved By</dt>
-              <dd>{promo.approvedBy}</dd>
+              <dd>{promo.approverEmail}</dd>
             </>
           )}
           {promo.completedAt && (

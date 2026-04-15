@@ -38,21 +38,26 @@ export interface GateResult {
 export interface PromotionRequest {
   id: string;
   applicationId: string;
-  applicationName: string;
-  teamSlug: string;
+  applicationName: string | null;
+  teamSlug: string | null;
   fromTier: Tier | null;
-  toTier: Tier;
-  fromVersion: string | null;
-  toVersion: string;
-  strategy: Strategy;
+  targetTier: Tier;
+  imageTag: string | null;
+  chartVersion: string | null;
+  gitSha: string | null;
+  strategy: Strategy | null;
   status: PromotionStatus;
+  notes: string | null;
   requestedBy: string;
   requestedAt: string;
-  approvedBy: string | null;
+  approverEmail: string | null;
   approvedAt: string | null;
-  completedAt: string | null;
+  rejectionReason: string | null;
   forceReason: string | null;
-  notes: string | null;
+  forcedBy: string | null;
+  executedAt: string | null;
+  completedAt: string | null;
+  rollbackRevision: string | null;
 }
 
 export interface PromotionRequestDetail extends PromotionRequest {
@@ -60,8 +65,10 @@ export interface PromotionRequestDetail extends PromotionRequest {
 }
 
 export interface PromotionCreate {
-  toTier: Tier;
-  toVersion: string;
+  targetTier: Tier;
+  imageTag?: string;
+  chartVersion?: string;
+  gitSha?: string;
   strategy?: Strategy;
   notes?: string;
 }
@@ -108,9 +115,9 @@ export function listTeamPromotions(
   teamSlug: string,
   appName: string
 ): Promise<PromotionRequest[]> {
-  return get<PromotionRequest[]>(
+  return get<{ items: PromotionRequest[]; total: number }>(
     `/api/v1/teams/${teamSlug}/applications/${appName}/promotion-requests`
-  );
+  ).then((r) => r.items);
 }
 
 export function listAllPromotions(
@@ -121,9 +128,9 @@ export function listAllPromotions(
   if (status) params.set("status", status);
   if (tier) params.set("tier", tier);
   const qs = params.toString();
-  return get<PromotionRequest[]>(
+  return get<{ items: PromotionRequest[]; total: number }>(
     `/api/v1/promotion-requests${qs ? `?${qs}` : ""}`
-  );
+  ).then((r) => r.items);
 }
 
 export function getPromotion(id: string): Promise<PromotionRequestDetail> {
@@ -264,15 +271,17 @@ export function listAllGates(
   if (scope) params.set("scope", scope);
   if (tier) params.set("tier", tier);
   const qs = params.toString();
-  return get<PromotionGate[]>(`/api/v1/gates${qs ? `?${qs}` : ""}`);
+  return get<{ items: PromotionGate[]; total: number }>(
+    `/api/v1/admin/promotion-gates${qs ? `?${qs}` : ""}`
+  ).then((r) => r.items);
 }
 
 export function createPlatformGate(
   body: PlatformGateCreate
 ): Promise<PromotionGate> {
-  return post<PromotionGate>(`/api/v1/gates`, body);
+  return post<PromotionGate>(`/api/v1/admin/promotion-gates`, body);
 }
 
 export function deletePlatformGate(id: string): Promise<void> {
-  return del(`/api/v1/gates/${id}`);
+  return del(`/api/v1/admin/promotion-gates/${id}`);
 }
