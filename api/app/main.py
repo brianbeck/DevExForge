@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.database import init_engine
-from app.routers import health, teams, members, environments, promotion, security, observability, catalog, admin, audit, applications
+from app.routers import health, teams, members, environments, promotion, promotions, security, observability, catalog, admin, audit, applications, rollouts, gates
 from app.routers.members import transfer_router
 from app.services.argocd_sync import start_sync_loop, stop_sync_loop
 
@@ -49,8 +49,13 @@ app.include_router(members.router)
 app.include_router(transfer_router)
 app.include_router(applications.router)
 app.include_router(applications.admin_router)
+app.include_router(gates.team_router)
+app.include_router(gates.admin_router)
+app.include_router(promotions.router)
+app.include_router(promotions.team_router)
 app.include_router(environments.router)
 app.include_router(promotion.router)
+app.include_router(rollouts.router)
 app.include_router(security.router)
 app.include_router(observability.router)
 app.include_router(catalog.router)

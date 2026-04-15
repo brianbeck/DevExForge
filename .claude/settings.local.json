@@ -45,7 +45,9 @@
       "Bash(npx tsc *)",
       "Bash(ls .venv/bin/python* venv/bin/python*)",
       "Bash(ls */bin/python)",
-      "Bash(../.venv/bin/python -m pytest tests/ -q)"
+      "Bash(../.venv/bin/python -m pytest tests/ -q)",
+      "Bash(../.venv/bin/python -c \"from app.models import PromotionGate, PromotionRequest, PromotionGateResult; from app.schemas.promotion import PromotionRequestCreate, PromotionGateCreate, RolloutStatusResponse; print\\('ok'\\)\")",
+      "Bash(../.venv/bin/python *)"
     ]
   }
 }

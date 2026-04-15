@@ -2,7 +2,7 @@
 
 import asyncio
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,12 +10,14 @@ from sqlalchemy.orm import selectinload
 
 from app import database
 from app.models.application import ApplicationDeployment, ApplicationDeploymentEvent
+from app.models.promotion import PromotionRequest
 from app.services.k8s_service import k8s_service
 
 logger = logging.getLogger(__name__)
 
 SYNC_INTERVAL_SECONDS = 30
 ADVISORY_LOCK_KEY = 0xDE7EF07E  # arbitrary stable key for the sync lock
+DEGRADED_TIMEOUT_MINUTES = 10
 
 _task: asyncio.Task | None = None
 
@@ -93,6 +95,14 @@ async def _sync_once() -> None:
         try:
             await _sync_deployments(session)
             await session.commit()
+            try:
+                await _monitor_promotions(session)
+            except Exception as e:
+                logger.exception("Promotion monitor failed: %s", e)
+                try:
+                    await session.rollback()
+                except Exception:
+                    pass
         except Exception:
             await session.rollback()
             raise
@@ -229,3 +239,66 @@ def _update_from_argocd(
             details={"from": old_health, "to": new_health},
         )
         session.add(event)
+
+
+async def _monitor_promotions(session: AsyncSession) -> None:
+    """Monitor in-flight promotion requests and finalize or auto-rollback."""
+    from app.services import promotion_service  # lazy import to avoid cycles
+
+    stmt = select(PromotionRequest).where(PromotionRequest.status == "executing")
+    result = await session.execute(stmt)
+    requests = list(result.scalars().all())
+
+    now = datetime.now(timezone.utc)
+
+    for request in requests:
+        try:
+            dep_stmt = (
+                select(ApplicationDeployment)
+                .where(
+                    ApplicationDeployment.application_id == request.application_id,
+                    ApplicationDeployment.environment_id == request.to_environment_id,
+                )
+                .order_by(ApplicationDeployment.deployed_at.desc())
+                .limit(1)
+            )
+            dep_result = await session.execute(dep_stmt)
+            deployment = dep_result.scalar_one_or_none()
+            if deployment is None:
+                continue
+
+            health = deployment.health_status
+
+            if health == "Healthy":
+                request.status = "completed"
+                request.completed_at = now
+                event = ApplicationDeploymentEvent(
+                    deployment_id=deployment.id,
+                    event_type="promotion_completed",
+                    actor="system",
+                    details={"promotion_request_id": str(request.id)},
+                )
+                session.add(event)
+                await session.commit()
+            elif health == "Degraded":
+                executed_at = request.executed_at
+                if executed_at is not None:
+                    if executed_at.tzinfo is None:
+                        executed_at = executed_at.replace(tzinfo=timezone.utc)
+                    if now - executed_at > timedelta(minutes=DEGRADED_TIMEOUT_MINUTES):
+                        await promotion_service.auto_rollback(
+                            session,
+                            request.id,
+                            reason="degraded_health_timeout",
+                        )
+            else:
+                # Progressing / Unknown / other: still in flight
+                continue
+        except Exception as e:
+            logger.exception(
+                "Failed to monitor promotion request %s: %s", request.id, e
+            )
+            try:
+                await session.rollback()
+            except Exception:
+                pass

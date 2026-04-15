@@ -295,6 +295,49 @@ def mock_k8s():
 
 
 @pytest_asyncio.fixture
+async def seeded_platform_gates(db_engine):
+    """Insert the 8 platform gates that migration 006 would seed.
+
+    The test suite uses ``Base.metadata.create_all`` instead of running
+    Alembic migrations, so the seed INSERT from 006 never executes. Tests
+    that need the platform gates present should depend on this fixture.
+    Returns the list of inserted PromotionGate rows.
+    """
+    from app.models.promotion import PromotionGate
+
+    session_factory = async_sessionmaker(
+        db_engine, class_=AsyncSession, expire_on_commit=False
+    )
+    seeds = [
+        ("staging", "deployed_in_prior_env", {}),
+        ("staging", "health_passing", {}),
+        ("production", "deployed_in_prior_env", {}),
+        ("production", "health_passing", {}),
+        ("production", "min_time_in_prior_env", {"hours": 24}),
+        ("production", "no_critical_cves", {}),
+        ("production", "compliance_score_min", {"min": 80}),
+        ("production", "manual_approval", {"required_role": "admin", "count": 1}),
+    ]
+    rows: list = []
+    async with session_factory() as session:
+        for tier, gtype, config in seeds:
+            gate = PromotionGate(
+                scope="platform",
+                team_id=None,
+                application_id=None,
+                tier=tier,
+                gate_type=gtype,
+                config=config,
+                enforcement="blocking",
+                created_by="system",
+            )
+            session.add(gate)
+            rows.append(gate)
+        await session.commit()
+    return rows
+
+
+@pytest_asyncio.fixture
 async def client(db_engine):
     """Async test client authenticated as an **admin** user."""
     admin_user = make_test_user()

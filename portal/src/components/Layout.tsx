@@ -9,6 +9,14 @@ export default function Layout() {
     keycloak.tokenParsed?.preferred_username ||
     "User";
 
+  const realmAccess = (keycloak.tokenParsed as { realm_access?: { roles?: string[] } } | undefined)
+    ?.realm_access;
+  const roles = realmAccess?.roles || [];
+  const isAdmin =
+    roles.includes("platform-admin") ||
+    roles.includes("admin") ||
+    roles.includes("devexforge-admin");
+
   return (
     <div className="layout">
       <aside className="sidebar">
@@ -34,6 +42,26 @@ export default function Layout() {
             <span className="nav-icon">&#9632;</span>
             Applications
           </NavLink>
+          <NavLink
+            to="/promotions"
+            className={({ isActive }) =>
+              `nav-link${isActive ? " active" : ""}`
+            }
+          >
+            <span className="nav-icon">&#8593;</span>
+            Promotions
+          </NavLink>
+          {isAdmin && (
+            <NavLink
+              to="/admin/gates"
+              className={({ isActive }) =>
+                `nav-link${isActive ? " active" : ""}`
+              }
+            >
+              <span className="nav-icon">&#9919;</span>
+              Gates
+            </NavLink>
+          )}
           <NavLink
             to="/catalog"
             className={({ isActive }) =>

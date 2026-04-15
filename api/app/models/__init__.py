@@ -8,6 +8,11 @@ from app.models.application import (
     ApplicationDeployment,
     ApplicationDeploymentEvent,
 )
+from app.models.promotion import (
+    PromotionGate,
+    PromotionRequest,
+    PromotionGateResult,
+)
 
 __all__ = [
     "Team",
@@ -20,4 +25,7 @@ __all__ = [
     "Application",
     "ApplicationDeployment",
     "ApplicationDeploymentEvent",
+    "PromotionGate",
+    "PromotionRequest",
+    "PromotionGateResult",
 ]

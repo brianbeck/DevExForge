@@ -11,6 +11,7 @@ from app.database import Base
 if TYPE_CHECKING:
     from app.models.team import Team
     from app.models.environment import Environment
+    from app.models.promotion import PromotionRequest
 
 
 class Application(Base):
@@ -42,6 +43,9 @@ class Application(Base):
     team: Mapped["Team"] = relationship("Team", back_populates="applications")
     deployments: Mapped[list["ApplicationDeployment"]] = relationship(
         "ApplicationDeployment", back_populates="application", cascade="all, delete-orphan"
+    )
+    promotion_requests: Mapped[list["PromotionRequest"]] = relationship(
+        "PromotionRequest", back_populates="application", cascade="all, delete-orphan"
     )
 
 

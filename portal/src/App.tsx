@@ -14,6 +14,10 @@ import ApplicationDetailPage from "@/pages/ApplicationDetailPage";
 import GlobalInventoryPage from "@/pages/GlobalInventoryPage";
 import AdminPage from "@/pages/AdminPage";
 import AuditLogPage from "@/pages/AuditLogPage";
+import PromotionsPage from "@/pages/PromotionsPage";
+import PromotionRequestDetailPage from "@/pages/PromotionRequestDetailPage";
+import RolloutStatusPage from "@/pages/RolloutStatusPage";
+import AdminGatesPage from "@/pages/AdminGatesPage";
 import "./App.css";
 
 export default function App() {
@@ -43,11 +47,25 @@ export default function App() {
               path="applications/:name"
               element={<ApplicationDetailPage />}
             />
+            <Route
+              path="applications/:name/promotions"
+              element={<PromotionsPage />}
+            />
+            <Route
+              path="applications/:name/rollout"
+              element={<RolloutStatusPage />}
+            />
           </Route>
           <Route path="/teams/:slug/audit" element={<AuditLogPage />} />
           <Route path="/applications" element={<GlobalInventoryPage />} />
+          <Route path="/promotions" element={<PromotionsPage />} />
+          <Route
+            path="/promotion-requests/:id"
+            element={<PromotionRequestDetailPage />}
+          />
           <Route path="/catalog" element={<CatalogPage />} />
           <Route path="/admin" element={<AdminPage />} />
+          <Route path="/admin/gates" element={<AdminGatesPage />} />
           <Route path="/audit" element={<AuditLogPage />} />
         </Route>
       </Routes>

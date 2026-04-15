@@ -16,9 +16,17 @@ import type {
   ApplicationUpdate,
 } from "@/api/applications";
 import { healthBadgeClass } from "./ApplicationsPage";
+import { createPromotionRequest } from "@/api/promotions";
+import type { Strategy } from "@/api/promotions";
 
 const TIERS = ["dev", "staging", "production"] as const;
 type Tier = (typeof TIERS)[number];
+
+const NEXT_TIER: Record<Tier, Tier | null> = {
+  dev: "staging",
+  staging: "production",
+  production: null,
+};
 
 export default function ApplicationDetailPage() {
   const { slug, name } = useParams<{ slug: string; name: string }>();
@@ -31,6 +39,13 @@ export default function ApplicationDetailPage() {
   const [deploying, setDeploying] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editData, setEditData] = useState<ApplicationUpdate>({});
+  const [promoteFromTier, setPromoteFromTier] = useState<Tier | null>(null);
+  const [promoteForm, setPromoteForm] = useState<{
+    imageTag: string;
+    strategy: Strategy;
+    notes: string;
+  }>({ imageTag: "", strategy: "rolling", notes: "" });
+  const [promoting, setPromoting] = useState(false);
   const [deployForm, setDeployForm] = useState({
     imageTag: "",
     chartVersion: "",
@@ -114,6 +129,40 @@ export default function ApplicationDetailPage() {
       setError(err instanceof Error ? err.message : "Failed to deploy");
     } finally {
       setDeploying(false);
+    }
+  }
+
+  function openPromoteModal(fromTier: Tier) {
+    const current = app?.deployments.find(
+      (d) => d.environmentTier === fromTier
+    );
+    setPromoteFromTier(fromTier);
+    setPromoteForm({
+      imageTag: current?.imageTag || "",
+      strategy: "rolling",
+      notes: "",
+    });
+  }
+
+  async function handlePromote(e: React.FormEvent) {
+    e.preventDefault();
+    if (!slug || !name || !promoteFromTier) return;
+    const toTier = NEXT_TIER[promoteFromTier];
+    if (!toTier) return;
+    setPromoting(true);
+    try {
+      const result = await createPromotionRequest(slug, name, {
+        toTier,
+        toVersion: promoteForm.imageTag,
+        strategy: promoteForm.strategy,
+        notes: promoteForm.notes || undefined,
+      });
+      setPromoteFromTier(null);
+      navigate(`/promotion-requests/${result.id}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to create promotion");
+    } finally {
+      setPromoting(false);
     }
   }
 
@@ -305,14 +354,24 @@ export default function ApplicationDetailPage() {
               <div key={tier} className="deployment-card">
                 <div className="deployment-card-header">
                   <h4>{tier}</h4>
-                  <button
-                    className="btn btn-sm btn-primary"
-                    onClick={() =>
-                      setDeployTier(deployTier === tier ? null : tier)
-                    }
-                  >
-                    {deployTier === tier ? "Cancel" : "Deploy"}
-                  </button>
+                  <div className="btn-group">
+                    <button
+                      className="btn btn-sm btn-primary"
+                      onClick={() =>
+                        setDeployTier(deployTier === tier ? null : tier)
+                      }
+                    >
+                      {deployTier === tier ? "Cancel" : "Deploy"}
+                    </button>
+                    {NEXT_TIER[tier] && d && (
+                      <button
+                        className="btn btn-sm"
+                        onClick={() => openPromoteModal(tier)}
+                      >
+                        Promote to {NEXT_TIER[tier]}
+                      </button>
+                    )}
+                  </div>
                 </div>
                 {d ? (
                   <>
@@ -465,6 +524,93 @@ export default function ApplicationDetailPage() {
           </table>
         )}
       </div>
+
+      {promoteFromTier && NEXT_TIER[promoteFromTier] && (
+        <div
+          className="modal-backdrop"
+          onClick={() => setPromoteFromTier(null)}
+        >
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h3>Promote to {NEXT_TIER[promoteFromTier]}</h3>
+            <form onSubmit={handlePromote}>
+              <div className="form-group">
+                <label>Target Tier</label>
+                <input
+                  type="text"
+                  value={NEXT_TIER[promoteFromTier] || ""}
+                  disabled
+                />
+              </div>
+              <div className="form-group">
+                <label>Image Tag</label>
+                <input
+                  type="text"
+                  required
+                  value={promoteForm.imageTag}
+                  onChange={(e) =>
+                    setPromoteForm({
+                      ...promoteForm,
+                      imageTag: e.target.value,
+                    })
+                  }
+                />
+              </div>
+              <div className="form-group">
+                <label>Strategy</label>
+                <select
+                  value={promoteForm.strategy}
+                  onChange={(e) =>
+                    setPromoteForm({
+                      ...promoteForm,
+                      strategy: e.target.value as Strategy,
+                    })
+                  }
+                >
+                  <option value="rolling">rolling</option>
+                  <option
+                    value="bluegreen"
+                    disabled={NEXT_TIER[promoteFromTier] !== "production"}
+                  >
+                    bluegreen
+                  </option>
+                  <option
+                    value="canary"
+                    disabled={NEXT_TIER[promoteFromTier] !== "production"}
+                  >
+                    canary
+                  </option>
+                </select>
+              </div>
+              <div className="form-group">
+                <label>Notes (optional)</label>
+                <input
+                  type="text"
+                  value={promoteForm.notes}
+                  onChange={(e) =>
+                    setPromoteForm({ ...promoteForm, notes: e.target.value })
+                  }
+                />
+              </div>
+              <div className="btn-group">
+                <button
+                  className="btn btn-primary"
+                  type="submit"
+                  disabled={promoting}
+                >
+                  {promoting ? "Creating..." : "Create Promotion Request"}
+                </button>
+                <button
+                  className="btn"
+                  type="button"
+                  onClick={() => setPromoteFromTier(null)}
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
