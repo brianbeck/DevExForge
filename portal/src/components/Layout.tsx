@@ -73,6 +73,7 @@ export default function Layout() {
           </NavLink>
           <NavLink
             to="/admin"
+            end
             className={({ isActive }) =>
               `nav-link${isActive ? " active" : ""}`
             }

@@ -68,7 +68,9 @@ async def list_all_gates(
         stmt = stmt.where(PromotionGate.scope == scope)
     if tier is not None:
         stmt = stmt.where(PromotionGate.tier == tier)
-    stmt = stmt.order_by(PromotionGate.created_at)
+    stmt = stmt.order_by(
+        PromotionGate.tier, PromotionGate.gate_type, PromotionGate.created_at
+    )
     result = await db.execute(stmt)
     gates = result.scalars().all()
     items = [_to_response(g) for g in gates]

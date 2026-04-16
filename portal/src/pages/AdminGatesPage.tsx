@@ -255,9 +255,13 @@ export default function AdminGatesPage() {
                 <td>{g.scope}</td>
                 <td>{g.enforcement}</td>
                 <td>
-                  <pre className="gate-config-pre">
-                    {JSON.stringify(g.config, null, 2)}
-                  </pre>
+                  {g.config && Object.keys(g.config).length > 0 ? (
+                    <pre className="gate-config-pre">
+                      {JSON.stringify(g.config, null, 2)}
+                    </pre>
+                  ) : (
+                    <span className="text-muted">—</span>
+                  )}
                 </td>
                 <td>{g.createdBy}</td>
                 <td>{new Date(g.createdAt).toLocaleString()}</td>
